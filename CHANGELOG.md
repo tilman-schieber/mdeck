@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.3.2 — 2026-10-01
+
+- Fixed: on plain `http://` network addresses, as with `mdeck dev --host`, browsers offer no `crypto.randomUUID`. A phone on the answer page then got a new identity with every reload, so a changed vote could count twice, and the presenter view did not open at all. Both now use a fallback that works everywhere.
+
 ## 1.3.1 — 2026-09-30
 
 - Phones no longer flip between two screens showing the same presentation: the room server follows the screen where the slides were changed last, a screen that only opened does not take over, and the presenter view says when another screen has the phones. A screen that cannot read its theme yet no longer sends an empty look, which made the phones' fonts jump.

@@ -32,7 +32,8 @@ export function requestedView(url, fallback = 'deck') {
 // Scope controls to this file and presenter session, including separate tabs.
 const controlUrl = new URL(window.location.href)
 if (requestedView(controlUrl) === 'presenter' && !controlUrl.searchParams.has('session')) {
-  controlUrl.searchParams.set('session', crypto.randomUUID())
+  // randomUUID only exists on https or localhost, not on an iPad at http://192.168…
+  controlUrl.searchParams.set('session', crypto.randomUUID?.() ?? Array.from(crypto.getRandomValues(new Uint8Array(16)), b => b.toString(16).padStart(2, '0')).join(''))
   history.replaceState(null, '', controlUrl)
 }
 const DECK_CHANNEL = `deck-control:${controlUrl.pathname}:${controlUrl.searchParams.get('session') ?? 'default'}`
