@@ -212,8 +212,8 @@ try {
   await tablet.evaluate("document.querySelector('.ink-btn[title=Undo]').click()")
   await until(tablet, `(${pathBox})[1] === ${before[1]}`)
 
-  // The laser: a trail on its own layer that retracts, never saved. Frames
-  // only run in the visible tab.
+  // The laser: a trail on its own layer that stays while the pen is down and
+  // retracts once it is lifted, never saved. Frames only run in the visible tab.
   await tablet.send('Page.bringToFront')
   await tablet.evaluate("document.querySelector('.ink-btn[title=\"Laser pointer\"]').click()")
   await until(tablet, `${tabletStage}.inkTool.tool === 'laser'`)
@@ -221,6 +221,8 @@ try {
   await tabletPen('mousePressed', 300, 200)
   for (let i = 1; i <= 8; i++) await tabletPen('mouseMoved', 300 + i * 30, 200)
   await until(tablet, `${laserPixels} > 0`)
+  await delay(1600)
+  assert.ok(await tablet.evaluate(`${laserPixels} > 0`), 'the laser trail stays while the pen is down')
   await tabletPen('mouseReleased', 540, 200)
   await until(tablet, `${laserPixels} === 0`)
   assert.equal(await tablet.evaluate("document.querySelectorAll('.slide-ink path').length"), 3, 'the laser is not saved')
@@ -395,7 +397,10 @@ try {
   await ipad.send('Input.dispatchMouseEvent', { type: 'mousePressed', ...onIpad([0.3, 0.4]), clickCount: 1, buttons: 1, ...pen })
   for (let i = 1; i <= 8; i++) { await ipad.send('Input.dispatchMouseEvent', { type: 'mouseMoved', ...onIpad([0.3 + 0.03 * i, 0.4]), buttons: 1, ...pen }); await delay(30) }
   await until(projector2, "document.querySelector('deck-stage')._lasers.size > 0")
+  await delay(1600)
+  assert.ok(await projector2.evaluate("[...document.querySelector('deck-stage')._lasers.values()].some(entry => entry.points.length > 1)"), 'the projector keeps the trail while the iPad pen is down')
   await ipad.send('Input.dispatchMouseEvent', { type: 'mouseReleased', ...onIpad([0.54, 0.4]), clickCount: 1, buttons: 0, ...pen })
+  await until(projector2, "document.querySelector('deck-stage')._lasers.size === 0")
   await ipad.evaluate(`${ipadFrame}.querySelector('deck-stage').setZoom({ scale: 2, x: 600, y: 400 })`)
   await until(projector2, "document.querySelector('deck-stage').zoom.scale === 2")
 
@@ -698,7 +703,7 @@ try {
   assert.equal(await flow.evaluate(`${flowStage}.state.step`), 1, 'two presses show the whole drawing')
   await flow.close()
 
-  console.log('Browser checks passed: custom layout rendering, reveal/undo/reset synchronization, session isolation, launch page, poll relay, scale, open questions, word cloud and join code, several answers with keys, closing and the right answer on the phones, options as a list, numbers, results kept beside the deck and shown in a build, saved ink, drawing, drawing in the presenter view, touch (fingers swipe through slides), straight lines (snapping to 15° steps) and their end points, select and move, laser, zoom, saving ink in dev, following on another device, a second device through the stage room, video played on the iPad playing on the projector, a deck in three languages (the switch, the audience and a follower, right to left), and in one browser without a server (also with a standalone server for the polls), hotspots (keys on the presenter slide, flights the audience follows, leaving them), and a drawing that builds up in numbered steps with parts to zoom to, with ids of its own on each slide.')
+  console.log('Browser checks passed: custom layout rendering, reveal/undo/reset synchronization, session isolation, launch page, poll relay, scale, open questions, word cloud and join code, several answers with keys, closing and the right answer on the phones, options as a list, numbers, results kept beside the deck and shown in a build, saved ink, drawing, drawing in the presenter view, touch (fingers swipe through slides), straight lines (snapping to 15° steps) and their end points, select and move, laser (kept while the pen is down), zoom, saving ink in dev, following on another device, a second device through the stage room, video played on the iPad playing on the projector, a deck in three languages (the switch, the audience and a follower, right to left), and in one browser without a server (also with a standalone server for the polls), hotspots (keys on the presenter slide, flights the audience follows, leaving them), and a drawing that builds up in numbered steps with parts to zoom to, with ids of its own on each slide.')
 } finally {
   await browser?.close()
   await tablet2?.close()
