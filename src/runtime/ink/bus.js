@@ -5,7 +5,7 @@
 //
 // Messages, the same on every transport:
 //   { type: 'segment', key, slideId, tool, color, size, from, points }
-//       points `from` index on, every ~60 ms while drawing
+//       points `from` index on, every ~25 ms while drawing
 //   { type: 'end', key, fade, stroke? }  the stroke is finished; a laser
 //       trail (tool 'laser', never saved) retracts on its own
 //   { type: 'dot', key, slideId, point } the laser's dot (null: hidden), as
@@ -19,8 +19,9 @@
 //   { type: 'op', op }                  a change of the saved ink (applyOp)
 // Keys start with the sending window's id, so strokes never mix.
 import { changeInk, renameSlide } from './store.js'
+import { joinSegment } from './segments.js'
 
-const SEGMENT_MS = 60
+const SEGMENT_MS = 25
 const DOT_MS = 50
 
 export function broadcastTransport(name) {
@@ -47,9 +48,8 @@ export function createInkBus(stage, transports) {
       else changeInk(message.op)
     }
     else if (message.type === 'segment') {
-      const known = incoming.get(message.key) ?? { ...message, points: [] }
-      // A lost segment leaves a gap until the end message repairs it.
-      if (message.from <= known.points.length) known.points = [...known.points.slice(0, message.from), ...message.points]
+      // Out of order, a segment waits for the one before it (segments.js).
+      const known = joinSegment(incoming.get(message.key) ?? { ...message, points: [] }, message)
       incoming.set(message.key, known)
       stage.liveStroke(message.key, known)
     } else if (message.type === 'controls') {

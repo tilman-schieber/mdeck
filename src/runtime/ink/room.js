@@ -9,7 +9,9 @@
 import { stageRoom } from '../../live/client.js'
 import { presenceQuery } from '../../live/presence.js'
 
-const BATCH_MS = 80
+// Live ink waits this long to gather a batch; with one request at a time the
+// network sets the pace, so a short wait adds little load and little lag.
+const BATCH_MS = 25
 
 /**
  * An ink bus transport through the stage room; `listen` only when `receive`.
@@ -17,11 +19,19 @@ const BATCH_MS = 80
  */
 export function roomTransport({ receive = false, view = null, onPresence = null } = {}) {
   const room = stageRoom()
-  let queue = [], timer = null, allowed = null, listeners = 1, source = null
+  let queue = [], timer = null, allowed = null, listeners = 1, source = null, sending = false
 
+  // One request at a time: two in flight could arrive in the other order.
   async function flush() {
     timer = null
-    if (!queue.length) return
+    if (!queue.length || sending) return
+    sending = true
+    try { await deliver() } finally { sending = false }
+    // What came in meanwhile has waited already: send it right away.
+    if (queue.length) timer ??= setTimeout(flush, 0)
+  }
+
+  async function deliver() {
     const messages = queue.splice(0, 100)
     if (allowed === null) {
       const info = await room.info()
@@ -32,8 +42,11 @@ export function roomTransport({ receive = false, view = null, onPresence = null 
       const response = await fetch(`${room.url}/ink`, { method: 'POST', headers: room.headers({ 'Content-Type': 'application/json' }), body: JSON.stringify({ messages }) })
       if (response.status === 403) { allowed = false; queue = []; return }
       if (response.ok) listeners = (await response.json()).listeners ?? 1
-    } catch {}
-    if (queue.length) timer = setTimeout(flush, BATCH_MS)
+    } catch {
+      // The network failed (an iPad's WLAN): send them again, or the others
+      // keep a gap. A repeated segment only writes the same points again.
+      queue.unshift(...messages)
+    }
   }
 
   return {
