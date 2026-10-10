@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- The laser's trail stays on the screen as long as the pen is down, also in the audience window and on paired devices, so a circle or an underline can be shown while you talk about it. Lifted, it retracts as before.
+
 ## 3.7.1 — 2026-10-09
 
 - A video file on a slide (`<videoplayer src="…" />`) follows the presenter view, on the laptop or a paired iPad: play, pause and a jump there do the same in the audience window, which plays the sound while the presenter view's copy stays silent. This works without a server too, in a built folder. An audience window that nobody has clicked yet plays silently and offers **Click for sound** (German: **Klicken für Ton**). Online videos from YouTube, Vimeo or SwitchTube still play only where they are started; the iPad guide says so.

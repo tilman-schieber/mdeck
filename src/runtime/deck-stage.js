@@ -81,11 +81,14 @@ import { inkPaint, snapAngle } from '../core/ink.js'
   // Holding the pen still this long turns the stroke into a straight line.
   const STRAIGHTEN_MS = 500;
   const STRAIGHTEN_SLOP = 6;  // CSS px the pen may tremble while held
-  // Laser: a red glow with a white core; the trail lasts LASER_MS.
+  // Laser: a red glow with a white core. The trail stays while the pen is
+  // down; lifted, it retracts from its tail within LASER_MS.
   const LASER_GLOW = '#ff2a2a';
   const LASER_CORE = '#ffffff';
   const LASER_MS = 1200;
-  const LASER_GAP_MS = 250;
+  // A trail whose end never arrives (the other window closed) goes after this.
+  const LASER_HELD_MS = 30000;
+  const LASER_STEP = 4;  // design px between the points of a held trail
   // Zoom: up to this many times the fitted size.
   const ZOOM_MAX = 6;
   const VALIDATE_ATTR = 'no_overflowing_text,no_overlapping_text,slide_sized_text';
@@ -946,7 +949,7 @@ import { inkPaint, snapAngle } from '../core/ink.js'
     get inking() { return this.hasAttribute('data-inking'); }
     set inking(on) {
       this.toggleAttribute('data-inking', !!on);
-      if (!on) { this._endInk(null); this.laserDot('local', null, null); this.showSelection(null); }
+      if (!on) { this._endInk(null); this.laserRelease('local'); this.laserDot('local', null, null); this.showSelection(null); }
       this.dispatchEvent(new CustomEvent('inkmode', { detail: { inking: !!on }, bubbles: true, composed: true }));
     }
 
@@ -1002,7 +1005,7 @@ import { inkPaint, snapAngle } from '../core/ink.js'
       const drawing = this._inkDrawing = { pointerId: e.pointerId, touch: e.pointerType === 'touch', tool, points: [point], slideId: this._inkSlideId(), gesture: this._inkGesture, key: `${this._inkGesture}` };
       if (tool.tool === 'eraser') { this._erase(point); return; }
       if (tool.tool === 'select') { this._inkSelect('down', point); return; }
-      if (tool.tool === 'laser') { this.laserTrail('local', drawing.slideId, [point]); this._inkProgress(drawing); return; }
+      if (tool.tool === 'laser') { this.laserTrail('local', drawing.slideId, [point], { start: true }); this._inkProgress(drawing); return; }
       const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
       this._styleLive(path, tool);
       this._appendLive(path);
@@ -1154,7 +1157,8 @@ import { inkPaint, snapAngle } from '../core/ink.js'
       if (tool === 'select') { this._inkSelect('up', drawing.points[drawing.points.length - 1], drawing); return; }
       const detail = { key: drawing.key, slideId: drawing.slideId, tool, color, size, points: drawing.points };
       if (tool === 'laser') {
-        // Never saved: the trail retracts on its own.
+        // Never saved: lifted, the trail retracts on its own.
+        this.laserRelease('local');
         this.laserDot('local', drawing.slideId, null);
         this.dispatchEvent(new CustomEvent('inklaser', { detail, bubbles: true, composed: true }));
         return;
@@ -1355,8 +1359,10 @@ import { inkPaint, snapAngle } from '../core/ink.js'
     // Laser -------------------------------------------------------------------
     //
     // Trails and dots by key ('local' for this window, others from the ink
-    // bus), in design pixels. A trail's points expire after LASER_MS, so it
-    // retracts from its tail; frames run only while some trail is left.
+    // bus), in design pixels. While the pen is down a trail's points stay
+    // (time Infinity); lifted, they are stamped so that they expire one after
+    // the other within LASER_MS, and the trail retracts from its tail. Frames
+    // run only while some trail is left.
 
     _laserEntry(key, slideId) {
       let entry = this._lasers.get(key);
@@ -1365,13 +1371,33 @@ import { inkPaint, snapAngle } from '../core/ink.js'
       return entry;
     }
 
-    /** Adds points to a laser trail; its dot moves to the last one. */
-    laserTrail(key, slideId, points) {
+    /** Adds points to a laser trail, held until laserRelease; its dot moves to the last one. */
+    laserTrail(key, slideId, points, { start = false } = {}) {
       if (!points?.length) return;
       const entry = this._laserEntry(key, slideId);
-      const t = performance.now();
-      for (const [x, y] of points) entry.points.push([x, y, t]);
+      points.forEach(([x, y], i) => {
+        // A held trail grows as long as the pen is down: skip points that
+        // add nothing visible, so a long trail stays cheap to draw.
+        const last = entry.points[entry.points.length - 1];
+        const begins = start && i === 0;
+        if (!begins && last && last[2] === Infinity && Math.hypot(x - last[0], y - last[1]) < LASER_STEP) return;
+        entry.points.push([x, y, Infinity, begins]);
+      });
+      entry.heldSince = performance.now();
+      if (key !== 'local') { clearTimeout(entry.heldTimer); entry.heldTimer = setTimeout(() => this.laserRelease(key), LASER_HELD_MS); }
       entry.dot = points[points.length - 1];
+      this._kickLaser();
+    }
+
+    /** The pen is lifted: the held trail retracts from its tail. */
+    laserRelease(key) {
+      const entry = this._lasers.get(key);
+      if (!entry) return;
+      const held = entry.points.filter(p => p[2] === Infinity);
+      const now = performance.now();
+      held.forEach((p, i) => { p[2] = now - LASER_MS + LASER_MS * (i + 1) / held.length; });
+      entry.heldSince = null;
+      clearTimeout(entry.heldTimer);
       this._kickLaser();
     }
 
@@ -1412,7 +1438,8 @@ import { inkPaint, snapAngle } from '../core/ink.js'
       for (const [key, entry] of this._lasers) {
         entry.points = entry.points.filter(p => now - p[2] < LASER_MS);
         if (!entry.points.length && !entry.dot) { this._lasers.delete(key); continue; }
-        if (entry.points.length) running = true;
+        // Only a retracting trail needs frames; a held one is drawn again when points arrive.
+        if (entry.points.some(p => p[2] !== Infinity)) running = true;
         if (entry.slideId && slideId && entry.slideId !== slideId) continue;
         // A red glow with a white core, the core drawn second.
         for (const [color, lineWidth, blur] of [[LASER_GLOW, 8, 14], [LASER_CORE, 3, 0]]) {
@@ -1422,7 +1449,7 @@ import { inkPaint, snapAngle } from '../core/ink.js'
           ctx.beginPath();
           entry.points.forEach((p, i) => {
             const [x, y] = at(p);
-            if (i === 0 || p[2] - entry.points[i - 1][2] > LASER_GAP_MS) ctx.moveTo(x, y);
+            if (i === 0 || p[3]) ctx.moveTo(x, y);
             else ctx.lineTo(x, y);
           });
           ctx.stroke();
@@ -1454,7 +1481,7 @@ import { inkPaint, snapAngle } from '../core/ink.js'
       this._remoteInk ??= new Map();
       if (tool === 'laser') {
         const seen = this._remoteInk.get(key) ?? 0;
-        if (points.length > seen) this.laserTrail(key, slideId, points.slice(seen));
+        if (points.length > seen) this.laserTrail(key, slideId, points.slice(seen), { start: seen === 0 });
         this._remoteInk.set(key, points.length);
         return;
       }
@@ -1473,7 +1500,7 @@ import { inkPaint, snapAngle } from '../core/ink.js'
       const path = this._remoteInk?.get(key);
       if (path == null) return;
       this._remoteInk.delete(key);
-      if (typeof path === 'number') { this.laserDot(key, null, null); return; }
+      if (typeof path === 'number') { this.laserRelease(key); this.laserDot(key, null, null); return; }
       if (fade) { requestAnimationFrame(() => path.classList.add('fading')); setTimeout(() => path.remove(), 3200); }
       else this._removeLive(path);
     }
