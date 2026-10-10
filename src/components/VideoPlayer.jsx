@@ -169,7 +169,12 @@ export default function VideoPlayer({ src, url, play = 'click', aspect, muted })
     >
       {url ? (
         iframeSrc
-          ? <iframe src={iframeSrc} allow="autoplay; fullscreen" allowFullScreen
+          // A deck served through a server (an iPad paired over the internet)
+          // comes with "Referrer-Policy: no-referrer", so pairing links never
+          // leak; YouTube refuses to play an embed that names no page
+          // ("This video is unavailable"). The player alone sends the
+          // deck's origin, never its path.
+          ? <iframe src={iframeSrc} allow="autoplay; fullscreen" allowFullScreen referrerpolicy="strict-origin"
               style={{ width: '100%', height: fixedAspect ? '100%' : 'auto', aspectRatio: fixedAspect ? undefined : '16 / 9', border: '0', display: 'block' }} />
           : <div class="video-player-placeholder" />
       ) : (
