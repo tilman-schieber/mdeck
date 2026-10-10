@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { parseSlides } from '../src/core/parseSlides.js'
-import { stripActivities, stripNotes } from '../src/core/editDeck.js'
+import { shareSlides, stripActivities, stripNotes } from '../src/core/editDeck.js'
 import { validateDeck } from '../src/core/validateDeck.js'
 import { layoutManifests } from '../src/extensions/discover.js'
 
@@ -48,4 +48,26 @@ test('the examples stay valid without their activities, also with the notes stri
     assert.ok(after.slides.every(slide => !/<(poll|question|wordcloud|scale)\b/i.test(slide.content.replace(/```[\s\S]*?```/g, ''))), name)
     assert.deepEqual(validateDeck(after, { layouts: layoutManifests(`examples/${name}/slides.md`) }).filter(d => d.severity === 'error'), [], name)
   }
+})
+
+test('shareSlides keeps the chosen slides, numbered as written, and their drawings follow', () => {
+  const { source, ids, removed } = shareSlides(deck, { slides: [3, 5, 11] })
+  const slides = parseSlides(source)
+  assert.equal(slides.deckConfig.theme, 'neue', 'the deck settings stay')
+  assert.deepEqual(slides.slides.map(slide => slide.content.match(/^# (.+)$/m)?.[1]), ['Vote', 'Named', 'After'])
+  assert.deepEqual(ids, { 'slide-3': 'slide-1', kept: 'kept', 'slide-11': 'slide-3' })
+  assert.equal(removed.length, 8)
+  // With --no-polls as well, the poll among them goes too.
+  const both = shareSlides(deck, { slides: [3, 5, 11], activities: true })
+  assert.deepEqual(parseSlides(both.source).slides.map(slide => slide.content.match(/^# (.+)$/m)?.[1]), ['Named', 'After'])
+  assert.throws(() => shareSlides(deck, { slides: [12] }), /has 11 slides; there is no slide 12/)
+  assert.equal(shareSlides(deck, { slides: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11] }).source, deck)
+})
+
+test('a style on a slide left out moves to the first kept slide; one in code does not', () => {
+  const styled = '---\ntheme: neue\n---\n\n# One\n\n<style>\n  .x { color: red; }\n</style>\n\n---\n# Two\n\n```html\n<style>.code {}</style>\n```\n\n---\n# Three\n'
+  const { source } = shareSlides(styled, { slides: [3] })
+  const [only] = parseSlides(source).slides
+  assert.match(only.content, /^# Three[\s\S]*<style>\n {2}\.x \{ color: red; \}\n<\/style>/)
+  assert.doesNotMatch(source, /\.code/)
 })

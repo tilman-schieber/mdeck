@@ -5,7 +5,7 @@ import { validateDeck, formatDiagnostics } from '../core/validateDeck.js'
 import { loadRegistry, extensionRoots, manifestsOf } from '../extensions/discover.js'
 import { resolvePalette } from '../extensions/appearance.js'
 import { embedFonts } from './fonts.js'
-import { stripNotes as stripNotesFrom, stripActivities as stripActivitiesFrom } from '../core/editDeck.js'
+import { stripNotes as stripNotesFrom, shareSlides } from '../core/editDeck.js'
 import { componentFolders, componentFiles } from './components.js'
 import { inkFileFor, normalizeInk, emptyInk } from '../core/ink.js'
 import { resultsFileFor, normalizeResults } from '../core/results.js'
@@ -222,13 +222,13 @@ export function deckLookOnly(registry, deckConfig = {}) {
 // extension changes are announced instead of forcing a reload. `source` is
 // the deck's text where there is no file (`mdeck design`, on the sample deck);
 // `slidesPath` then only says where its folder is.
-export function slidesPlugin(slidesPath, { inlineImages = false, inlineMedia = false, editor = false, stripNotes = false, stripActivities = false, ink = true, results = true, embedFonts: embedThemeFonts = false, deckLook = false, source: given = null } = {}) {
+export function slidesPlugin(slidesPath, { inlineImages = false, inlineMedia = false, editor = false, stripNotes = false, stripActivities = false, slides = null, ink = true, results = true, embedFonts: embedThemeFonts = false, deckLook = false, source: given = null } = {}) {
   const abs = resolve(slidesPath)
   const readDeck = () => given ?? readFileSync(abs, 'utf-8')
   const watchDeck = context => { if (given === null) context.addWatchFile(abs) }
   const sourceFor = raw => {
     const shared = stripNotes ? stripNotesFrom(raw) : raw
-    return stripActivities ? stripActivitiesFrom(shared).source : shared
+    return stripActivities || slides ? shareSlides(shared, { activities: stripActivities, slides }).source : shared
   }
   const inkPath = inkFileFor(abs)
   const resultsPath = resultsFileFor(abs)
@@ -321,10 +321,10 @@ export function slidesPlugin(slidesPath, { inlineImages = false, inlineMedia = f
         if (ink && existsSync(inkPath)) {
           try { data = normalizeInk(JSON.parse(readFileSync(inkPath, 'utf-8')), size) } catch (error) { this.warn(`${inkPath}: ${error.message}; showing no ink`) }
         }
-        // Without the activity slides, drawings follow their slides to their new ids.
-        if (stripActivities) {
+        // Without the activity slides or those not chosen, drawings follow their slides to their new ids.
+        if (stripActivities || slides) {
           try {
-            const { ids, removed } = stripActivitiesFrom(readDeck())
+            const { ids, removed } = shareSlides(readDeck(), { activities: stripActivities, slides })
             const gone = new Set(removed)
             data = { ...data, slides: Object.fromEntries(Object.entries(data.slides).filter(([id]) => !gone.has(id)).map(([id, strokes]) => [ids[id] ?? id, strokes])) }
           } catch {}

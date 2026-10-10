@@ -25,7 +25,7 @@ import { ManifestError, KINDS } from '../extensions/manifest.js'
 
 import { frameworkRoot } from '../paths.js'
 import { parseSlides } from '../core/parseSlides.js'
-import { stripNotes as stripNotesFrom, stripActivities as stripActivitiesFrom } from '../core/editDeck.js'
+import { stripNotes as stripNotesFrom, stripActivities as stripActivitiesFrom, shareSlides } from '../core/editDeck.js'
 import { parseArgs, parseSlideNumbers, validateServerOrigin } from './args.js'
 import { assertDrawings } from '../build/drawings.js'
 import { resultsFileFor, normalizeResults, resultsCsv } from '../core/results.js'
@@ -58,6 +58,16 @@ const positionals = () => parsed.positionals
 const outputOption = () => parsed.options['--output'] ?? null
 const serverOption = () => parsed.options['--server']
 const portOption = () => parsed.options['--port'] ?? null
+// --slide 3,5-7 for build, send and pdf: only these slides, numbered as written.
+function slideOption(input) {
+  const given = parsed.options['--slide']
+  if (given == null) return null
+  try {
+    const slides = parseSlideNumbers(given)
+    shareSlides(readFileSync(resolve(input), 'utf-8'), { slides })
+    return slides
+  } catch (error) { err(error.message); process.exit(1) }
+}
 
 // Layouts, themes and palettes all come from one registry: built-ins plus the
 // extensions/ folder beside the deck. Manifest problems are reported and stop
@@ -180,13 +190,13 @@ async function runNewWizard() {
   }
 }
 
-async function copyLocalAssets(slidesPath, outDir, { stripNotes = false, stripActivities = false } = {}) {
+async function copyLocalAssets(slidesPath, outDir, { stripNotes = false, stripActivities = false, slides = null } = {}) {
   const absSlides = resolve(slidesPath)
   const deckDir = dirname(absSlides)
   const absOutDir = resolve(outDir)
   const raw = readFileSync(absSlides, 'utf-8')
   let markdown = stripNotes ? stripNotesFrom(raw) : raw
-  if (stripActivities) markdown = stripActivitiesFrom(markdown).source
+  if (stripActivities || slides) markdown = shareSlides(markdown, { activities: stripActivities, slides }).source
 
   for (const ref of collectLocalAssetRefs(markdown)) {
     const source = resolve(deckDir, ref)
@@ -331,6 +341,8 @@ const HELP = `
       --notes                keep the speaker notes in the file
       --no-polls             for send, build --reader and pdf: leave out the slides with polls and join codes
       --no-pdf               do not render the PDF inside
+      --slide 3,5-7          for build, send and pdf: only these slides (numbered as in the deck,
+                             with their drawings; styles from slides left out stay)
     ${c.green}mdeck pdf${c.reset} [slides.md] [-o talk.pdf]       A PDF, one page per slide
       --no-drawings          for build, send and pdf: leave out <slides>.drawings.json
       --no-results           for build, send and pdf: leave out <slides>.results.json (the answers kept in the talk)
@@ -692,6 +704,7 @@ if (command === 'new') {
   // Polls show as a record of the talk; --no-polls leaves their slides and join codes out.
   const stripActivities = reader && hasFlag('--no-polls')
   const wantPdf = sending && !hasFlag('--no-pdf')
+  const slides = slideOption(input)
 
   if (!hasFlag('--no-drawings')) { try { assertDrawings(input) } catch (error) { err(error.message); process.exit(1) } }
   const given = outputOption()
@@ -705,7 +718,7 @@ if (command === 'new') {
   try {
     await build({
       ...baseConfig(input, { selfContained, defaultView: reader ? 'reader' : 'deck' }),
-      plugins: [preact(), slidesPlugin(resolve(input), { inlineImages: selfContained, inlineMedia: selfContained, embedFonts: selfContained, stripNotes, stripActivities, ink: !hasFlag('--no-drawings'), results: !hasFlag('--no-results'), deckLook: reader }), viteSingleFile()],
+      plugins: [preact(), slidesPlugin(resolve(input), { inlineImages: selfContained, inlineMedia: selfContained, embedFonts: selfContained, stripNotes, stripActivities, slides, ink: !hasFlag('--no-drawings'), results: !hasFlag('--no-results'), deckLook: reader }), viteSingleFile()],
       build: {
         outDir,
         emptyOutDir: !tempDir,
@@ -723,7 +736,7 @@ if (command === 'new') {
   await mkdir(finalOutDir, { recursive: true })
 
   if (!selfContained) {
-    await copyLocalAssets(input, finalOutDir, { stripNotes, stripActivities })
+    await copyLocalAssets(input, finalOutDir, { stripNotes, stripActivities, slides })
     if (launchers) await writePresenterLaunchers(finalOutDir, htmlFilename)
   }
 
@@ -748,6 +761,7 @@ if (command === 'new') {
   }
   if (stripNotes) tip('Speaker notes were removed from this file (use --notes to keep them).')
   if (stripActivities && stripActivitiesFrom(readFileSync(resolve(input), 'utf-8')).removed.length) tip('Slides with polls were left out (--no-polls).')
+  if (slides) tip(`Only slides ${parsed.options['--slide']} (--slide).`)
   ok(`${sending ? 'Made' : 'Built'}: ${c.cyan}${htmlFile}${c.reset}${reader ? ' — opens in the reader view' : ''}${selfContained ? ' (single file)' : ' + local assets'}\n`)
 
 // ── skill ─────────────────────────────────────────────────────────────────────
@@ -773,11 +787,12 @@ if (command === 'new') {
   const pdfFile = resolve(process.cwd(), outputOption() ?? basename(input).replace(/\.md$/i, '') + '.pdf')
   if (!hasFlag('--no-drawings')) { try { assertDrawings(input) } catch (error) { err(error.message); process.exit(1) } }
   if (!findChrome()) { err('No Chrome or Chromium found. Set MDECK_CHROME to its executable path.'); process.exit(1) }
+  const slides = slideOption(input)
   const tempDir = mkdtempSync(resolve(tmpdir(), 'mdeck-pdf-'))
   try {
     await build({
       ...baseConfig(input, { selfContained: true }),
-      plugins: [preact(), slidesPlugin(resolve(input), { inlineImages: true, inlineMedia: true, embedFonts: true, stripActivities: hasFlag('--no-polls'), ink: !hasFlag('--no-drawings'), results: !hasFlag('--no-results'), deckLook: true }), viteSingleFile()],
+      plugins: [preact(), slidesPlugin(resolve(input), { inlineImages: true, inlineMedia: true, embedFonts: true, stripActivities: hasFlag('--no-polls'), slides, ink: !hasFlag('--no-drawings'), results: !hasFlag('--no-results'), deckLook: true }), viteSingleFile()],
       build: { outDir: tempDir, emptyOutDir: true, target: 'esnext', assetsInlineLimit: 100 * 1024 * 1024 },
       logLevel: 'warn',
     })

@@ -94,6 +94,7 @@ The design page shows themes and palettes on a sample deck with every kind of sl
 | `mdeck send my-talk.md` | One file for readers: the reader view, speaker notes removed, a PDF inside |
 | `mdeck send my-talk.md --notes` | The same, keeping the speaker notes |
 | `mdeck send my-talk.md --no-polls` | The same, leaving out the slides with polls and their join codes |
+| `mdeck send my-talk.md --slide 12-30` | The same with only slides 12 to 30 and their drawings; also for `build` and `pdf` |
 | `mdeck send my-talk.md --no-pdf` | The same, without rendering the PDF |
 | `mdeck pdf my-talk.md -o talk.pdf` | Render the slides to a PDF file (`--no-polls` leaves out the slides with polls) |
 | `--no-drawings` | Leave out the drawings from `my-talk.drawings.json`, for `build`, `send` and `pdf` |

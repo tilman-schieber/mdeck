@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- `--slide 3,5-7` for `mdeck send`, `mdeck build` and `mdeck pdf` keeps only these slides, for example the part of a deck shown in one lecture, with their drawings. The numbers count the slides as written, like `mdeck snapshot --slide` and `mdeck check --render`. A `<style>` written on a slide that is left out moves to the first slide kept, since it styles the whole deck; the same now holds for slides left out with `--no-polls`.
+
 ## 3.7.1 — 2026-10-09
 
 - A video file on a slide (`<videoplayer src="…" />`) follows the presenter view, on the laptop or a paired iPad: play, pause and a jump there do the same in the audience window, which plays the sound while the presenter view's copy stays silent. This works without a server too, in a built folder. An audience window that nobody has clicked yet plays silently and offers **Click for sound** (German: **Klicken für Ton**). Online videos from YouTube, Vimeo or SwitchTube still play only where they are started; the iPad guide says so.

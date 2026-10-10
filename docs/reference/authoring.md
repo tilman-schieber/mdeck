@@ -802,6 +802,8 @@ While `mdeck run` runs, the answers are kept beside the deck in `<slides>.result
 
 `--no-polls` leaves slides with an activity or a join code (`<qrcode join />`) out of `mdeck send`, `mdeck build --reader` and `mdeck pdf`; without it they show as a record of the talk. Saved drawings follow the remaining slides.
 
+`--slide 3,5-7` keeps only these slides in `mdeck send`, `mdeck build` and `mdeck pdf`, numbered by their place in the deck as written. Drawings follow their slides, and `<style>` elements on the slides left out move to the first slide kept, since they style the whole deck.
+
 Rooms run inside `mdeck run` (add `--network` so phones can reach it) or on a server started with `mdeck server`, set in the deck:
 
 ```yaml
