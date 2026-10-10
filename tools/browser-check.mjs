@@ -306,6 +306,32 @@ try {
       if (!await to.waitFor(expected, { attempts: 150, interval: 50 })) throw new Error(`Round ${round + 1}: after ${act} on one side the other did not follow; presenter ${await position(presenter)}, audience ${await position(audience)}`)
     }
   }
+  // The slide number is a field: a number and Enter jump there, the audience
+  // follows; numbers out of range go to the first or last slide; Escape keeps
+  // the slide.
+  const jump = (text, key = 'Enter') => presenter.evaluate(`(() => {
+    const input = document.querySelector('.presenter-jump input')
+    input.focus()
+    input.value = ${JSON.stringify(text)}
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+    if (${JSON.stringify(key)} === 'Enter') input.form.requestSubmit()
+    else input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+  })()`)
+  await until(presenter, `${stage}.state.index === 0`)
+  await jump('2')
+  await until(audience, `${audienceStage}.state.index === 1`)
+  await until(presenter, "document.querySelector('.presenter-jump input').value === '02' && document.activeElement?.name !== 'slide'")
+  await jump('0')
+  await until(audience, `${audienceStage}.state.index === 0`)
+  await jump('99')
+  await until(audience, `${audienceStage}.state.index === 1`)
+  await jump('1', 'Escape')
+  await delay(300)
+  assert.equal(await audience.evaluate(`${audienceStage}.state.index`), 1, 'Escape keeps the slide')
+  assert.equal(await presenter.evaluate("document.querySelector('.presenter-jump input').value"), '02', 'Escape shows the current number again')
+  await presenter.evaluate(`${stage}.reset()`)
+  await until(audience, `${audienceStage}.state.index === 0`)
+
   // Back to where the checks below start: the second slide, nothing revealed.
   await presenter.evaluate(`${stage}.goTo(1)`)
   await until(audience, `${audienceStage}.state.index === 1 && ${audienceStage}.state.step === -1`)
@@ -571,7 +597,7 @@ try {
   await until(record, "[...document.querySelectorAll('[data-deck-active] .poll-count')].map(e => e.textContent).join() === '0,1' && !document.querySelector('[data-deck-active] .poll-dot')")
   // A page left open in front would keep the later checks' pages in the background.
   await record.close()
-  console.log('Browser checks passed: custom layout rendering, reveal/undo/reset synchronization, session isolation, launch page, poll relay, scale, open questions, word cloud and join code, several answers with keys, closing and the right answer on the phones, options as a list, numbers, results kept beside the deck and shown in a build, saved ink, drawing, drawing in the presenter view, touch (fingers swipe through slides), straight lines (snapping to 15° steps) and their end points, select and move, laser, zoom, saving ink in dev, following on another device, a second device through the stage room, video played on the iPad playing on the projector, and in one browser without a server (also with a standalone server for the polls).')
+  console.log('Browser checks passed: custom layout rendering, reveal/undo/reset synchronization, jumping to a slide by its number, session isolation, launch page, poll relay, scale, open questions, word cloud and join code, several answers with keys, closing and the right answer on the phones, options as a list, numbers, results kept beside the deck and shown in a build, saved ink, drawing, drawing in the presenter view, touch (fingers swipe through slides), straight lines (snapping to 15° steps) and their end points, select and move, laser, zoom, saving ink in dev, following on another device, a second device through the stage room, video played on the iPad playing on the projector, and in one browser without a server (also with a standalone server for the polls).')
 } finally {
   await browser?.close()
   await tablet2?.close()
