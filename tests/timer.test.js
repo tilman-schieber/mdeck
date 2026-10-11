@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { newTimer, timeLeft, encodeTimer, decodeTimer, startTimer, pauseTimer, resetTimer, setDuration, addTime, formatTime, followTimer, untilNextSecond } from '../src/runtime/timer.js'
+import { newTimer, timeLeft, encodeTimer, decodeTimer, startTimer, pauseTimer, resetTimer, setDuration, addTime, formatTime, followTimer, untilNextSecond, timerSounds, quietTimer, testSound } from '../src/runtime/timer.js'
 
 test('a timer counts down while running and keeps its time while paused', () => {
   let timer = startTimer(newTimer(3), 1000)
@@ -16,7 +16,7 @@ test('a timer counts down while running and keeps its time while paused', () => 
 test('windows pass on the time left, so their clocks need not agree', () => {
   const ipad = startTimer(newTimer(5), 1_000_000)
   const sent = encodeTimer({ ...ipad, visible: true, position: 'center' }, 1_030_000)
-  assert.deepEqual(sent, { running: true, remaining: 270000, duration: 300000, visible: true, position: 'center' })
+  assert.deepEqual(sent, { running: true, remaining: 270000, duration: 300000, visible: true, position: 'center', sound: null, volume: 0.8, quiet: false, test: 0 })
   // The laptop's clock is far off; it counts from when the message arrived.
   const laptop = decodeTimer(sent, 5_000)
   assert.equal(timeLeft(laptop, 65_000), 210000)
@@ -64,4 +64,26 @@ test('the next redraw comes when the second shown changes', () => {
   assert.equal(untilNextSecond(timer, 0), 1005)
   assert.equal(untilNextSecond(timer, 250), 755)
   assert.equal(untilNextSecond(timer, 60000), null)
+})
+
+test('the deck names its sounds, or lists files named after themselves', () => {
+  assert.deepEqual(timerSounds({ timer: { sounds: { Gong: './sounds/gong.mp3', Pause: ' ./sounds/pause.m4a ' } } }), [{ name: 'Gong', src: './sounds/gong.mp3' }, { name: 'Pause', src: './sounds/pause.m4a' }])
+  assert.deepEqual(timerSounds({ timer: { sounds: ['./sounds/glocke.wav', 7, ''] } }), [{ name: 'glocke', src: './sounds/glocke.wav' }])
+  assert.deepEqual(timerSounds({}), [])
+  assert.deepEqual(timerSounds({ timer: { sounds: 'gong.mp3' } }), [])
+})
+
+test('the end sound travels with the timer; starting again makes it sound again', () => {
+  const timer = { ...newTimer(1, { sound: './sounds/gong.mp3' }), volume: 0.5 }
+  const passed = decodeTimer(encodeTimer(quietTimer(timer)))
+  assert.equal(passed.sound, './sounds/gong.mp3')
+  assert.equal(passed.volume, 0.5)
+  assert.equal(passed.quiet, true)
+  assert.equal(startTimer(passed).quiet, false)
+  assert.equal(resetTimer(passed).quiet, false)
+  assert.equal(decodeTimer({ ...encodeTimer(timer), volume: 7, sound: '' }).volume, 1)
+  assert.equal(decodeTimer({ ...encodeTimer(timer), sound: '' }).sound, null)
+  const tried = testSound(timer)
+  assert.equal(tried.test, 1)
+  assert.notEqual(followTimer(startTimer(timer, 0), startTimer(tried, 0)), startTimer(timer, 0), 'trying the sound is a change, not a repetition')
 })

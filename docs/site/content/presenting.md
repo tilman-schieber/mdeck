@@ -121,6 +121,8 @@ For group work or an exercise, the presenter view has a **Countdown** that the r
 - The eye shows it in the audience window or hides it again. It keeps running while hidden.
 - The arrows put it in a corner, the dot big in the middle of the screen. In its last minute it turns amber, at the end red.
 
+**A sound at the end.** List sound files in the deck's settings (`timer: { sounds: { Gong: ./sounds/gong.mp3 } }`, files beside the deck) and the countdown offers them: choose one, its volume, **Try** to hear it once, **Stop** to end it, for example music for a break. It plays in the audience window when the time is up. Click once into the audience window before the talk: browsers play sound only after that, and the window says **Click for sound** until then.
+
 It follows from any screen of the talk: started on a paired iPad, the audience window and the laptop's presenter view show the same time, and a window opened or reloaded later catches up within a few seconds.
 
 ## Reveal points one at a time

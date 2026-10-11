@@ -13,7 +13,7 @@ import { S, PaletteSwatches } from './chrome.jsx'
 import { SlideErrorBoundary } from './SlideErrorBoundary.jsx'
 import { TimerPanel, useTimerTick } from './TimerPanel.jsx'
 import { mountTalkTimer } from './TimerOverlay.jsx'
-import { newTimer, encodeTimer, decodeTimer, followTimer, formatTime, timeLeft } from './timer.js'
+import { newTimer, encodeTimer, decodeTimer, followTimer, formatTime, timeLeft, timerSounds } from './timer.js'
 import { createEditorBridge } from './editorBridge.js'
 import { ReaderView } from './ReaderView.jsx'
 import { configureLive, announce, setLookSource, actAsPresenter, useSteering, setSavedResults } from '../live/client.js'
@@ -277,7 +277,8 @@ function PresenterView({ deckConfig: firstConfig, slides: firstSlides }) {
   const [timerRunning, setTimerRunning] = useState(false)
   // The countdown the room may see (timer.js): set here, passed to the slide
   // frame, which tells every other screen; what others set comes back here.
-  const [talkTimer, setTalkTimerState] = useState(() => newTimer(5))
+  const sounds = useMemo(() => timerSounds(deckConfig), [deckConfig])
+  const [talkTimer, setTalkTimerState] = useState(() => newTimer(5, { sound: timerSounds(deckConfig)[0]?.src ?? null }))
   const talkTimerRef = useRef(talkTimer)
   const [timerOpen, setTimerOpen] = useState(false)
   const setTalkTimer = next => { talkTimerRef.current = next; setTalkTimerState(next) }
@@ -511,7 +512,7 @@ function PresenterView({ deckConfig: firstConfig, slides: firstSlides }) {
       )}
       {slideLayout && timerOpen && (
         <div class="presenter-countdown-panel" style={{ position: 'fixed', top: 'calc(max(10px, env(safe-area-inset-top)) + 56px)', right: 'max(10px, env(safe-area-inset-right))', zIndex: 21, padding: '12px', borderRadius: '12px', background: 'rgba(17,17,17,0.94)', border: '1px solid #2a2a2a', color: '#ccc', fontFamily: 'ui-sans-serif, system-ui, sans-serif', fontSize: '13px' }}>
-          <TimerPanel timer={talkTimer} onChange={changeTimer} />
+          <TimerPanel timer={talkTimer} onChange={changeTimer} sounds={sounds} />
         </div>
       )}
       <aside class="presenter-aside" style={{
@@ -546,7 +547,7 @@ function PresenterView({ deckConfig: firstConfig, slides: firstSlides }) {
 
         <div style={{ flexShrink: 0 }}>
           <span style={S.label}>Countdown</span>
-          <TimerPanel timer={talkTimer} onChange={changeTimer} />
+          <TimerPanel timer={talkTimer} onChange={changeTimer} sounds={sounds} />
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
@@ -1007,7 +1008,9 @@ async function init() {
     watchInk(inkStage, { storageKey: inkStorageKey, transports: [roomTransport({ receive: true, view: 'audience' })] })
   } else if (inkStage) watchInk(inkStage, { storageKey: inkStorageKey })
   // The countdown, when the presenter shows it to the room; not in previews.
-  if (inkStage && (drawHere || audienceMode || followMode)) mountTalkTimer(inkStage)
+  // Its end sound plays where the room's sound is: the audience window, or
+  // the deck window or presenter frame while no other screen shows the deck.
+  if (inkStage && (drawHere || audienceMode || followMode)) mountTalkTimer(inkStage, { plays: () => audienceMode || (drawHere && (!embedded || !inkStage.hasAttribute('data-others-watching'))) })
 
   // A full deck or audience window is a presenter's screen; previews are
   // embedded, and a follower only watches.

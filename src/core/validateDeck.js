@@ -47,6 +47,16 @@ export function validateDeck(deck, { layouts = null, themes = null, palettes = n
   if (config.csl != null && (typeof config.csl !== 'string' || !config.csl.trim())) add('invalid-config', 'csl must be a style name (apa, vancouver, harvard1) or a .csl file', deck.configSource?.start)
   if (config.nocite != null && (!Array.isArray(config.nocite) || config.nocite.some(key => typeof key !== 'string'))) add('invalid-config', "nocite must be a list of reference keys, or ['*'] for all", deck.configSource?.start)
   if (config.server != null && (typeof config.server !== 'string' || !/^https?:\/\//.test(config.server))) add('invalid-config', 'server must be an http:// or https:// address', deck.configSource?.start)
+  // The countdown's end sounds (src/runtime/timer.js): named files, or a list of files.
+  if (config.timer != null) {
+    if (!isPlainObject(config.timer)) add('invalid-config', 'timer must be a mapping, such as timer: { sounds: { Gong: ./sounds/gong.mp3 } }', deck.configSource?.start)
+    else {
+      for (const key of Object.keys(config.timer)) if (key !== 'sounds') add('invalid-config', `timer.${key} is not a setting; available: sounds`, deck.configSource?.start, 'warning')
+      const sounds = config.timer.sounds
+      const files = Array.isArray(sounds) ? sounds : isPlainObject(sounds) ? Object.values(sounds) : null
+      if (sounds != null && (!files || !files.every(file => typeof file === 'string' && file.trim()))) add('invalid-config', 'timer.sounds must name sound files (Gong: ./sounds/gong.mp3) or list them', deck.configSource?.start)
+    }
+  }
   if (isPlainObject(config.session)) {
     for (const key of Object.keys(config.session)) if (!['id', 'code'].includes(key)) add('invalid-config', `session.${key} is not a setting; available: id, code`, deck.configSource?.start, 'warning')
     if (config.session.code != null && !/^\d{4,8}$/.test(String(config.session.code))) add('invalid-config', 'session.code must be 4 to 8 digits', deck.configSource?.start)

@@ -91,6 +91,24 @@ the palette.
 
 ---
 
+### Countdown sounds
+
+```yaml
+timer:
+  sounds:
+    Gong: ./sounds/gong.mp3       # a name for each file, beside the deck
+    Pause: ./sounds/pause.m4a
+```
+
+The presenter view's countdown offers these to play when it ends (or a list
+of files, named after themselves). The first is chosen at the start. The
+sound plays in the audience window, or, while no other screen shows the
+deck, in the presenter view's slide frame; never on a paired iPad's own
+speaker while the projector is connected, nor on phones. A browser plays
+sound only after a click in the window, so the audience window offers
+**Click for sound** until then. Folder builds take the files along;
+`mdeck check` reports missing ones. mp3, m4a/AAC and wav play everywhere.
+
 ### Reader settings
 
 ```yaml

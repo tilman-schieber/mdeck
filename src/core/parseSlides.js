@@ -2,7 +2,7 @@ import yaml from 'js-yaml'
 import { sourceLines, fenceState, scanDirectives, diagnostic } from './source.js'
 export { sourceLines, fenceState } from './source.js'
 
-export const DECK_KEYS = new Set('theme palette appearance params meta width height show lang labels callouts reader components server session bibliography csl nocite hotspots'.split(' '))
+export const DECK_KEYS = new Set('theme palette appearance params meta width height show lang labels callouts reader components server session bibliography csl nocite hotspots timer'.split(' '))
 export const SLIDE_KEYS = new Set('layout id title section number part description label image alt overlay eyebrow attribution props hotspots'.split(' '))
 
 // Names from before 2.0. They are still recognised, so that an old deck gets a

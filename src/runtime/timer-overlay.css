@@ -32,4 +32,19 @@
 .talk-timer[data-done] { color: #ff6b6b; animation: talk-timer-done 0.9s ease-in-out 4; }
 @keyframes talk-timer-done { 50% { opacity: 0.25; } }
 @media (prefers-reduced-motion: reduce) { .talk-timer[data-done] { animation: none; } }
+/* Shown where the end sound will play until the page may play sound. */
+.talk-timer-sound {
+  position: fixed;
+  z-index: 2147481001;
+  left: 50%;
+  bottom: 2.5vh;
+  transform: translateX(-50%);
+  font: 600 15px/1 ui-sans-serif, system-ui, sans-serif;
+  padding: 10px 16px;
+  border-radius: 999px;
+  border: 0;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.74);
+  cursor: pointer;
+}
 @media print { .talk-timer-host { display: none !important; } }

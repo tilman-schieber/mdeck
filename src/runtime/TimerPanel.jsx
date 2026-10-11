@@ -7,7 +7,7 @@ import { useState } from 'preact/hooks'
 import { Icon } from '../components/Icon.jsx'
 import { S } from './chrome.jsx'
 import { useTimerTick } from './TimerOverlay.jsx'
-import { TIMER_PRESETS, addTime, formatTime, pauseTimer, resetTimer, setDuration, startTimer, timeLeft } from './timer.js'
+import { TIMER_PRESETS, addTime, formatTime, pauseTimer, quietTimer, resetTimer, setDuration, startTimer, testSound, timeLeft } from './timer.js'
 
 export { useTimerTick }
 
@@ -16,13 +16,13 @@ const PLACES = { 'top-left': ['↖', 'Top left'], 'top-right': ['↗', 'Top righ
 
 
 /** `onChange(change)`: `change` turns the latest timer into the next. */
-export function TimerPanel({ timer, onChange, style }) {
+export function TimerPanel({ timer, onChange, sounds = [], style }) {
   useTimerTick(timer)
   const left = timeLeft(timer)
   const [custom, setCustom] = useState('')
   const on = active => active ? { background: '#2d3b4a', borderColor: '#4a6a8a', color: '#fff' } : {}
   const small = { ...S.btn, padding: '4px 8px', minWidth: '34px' }
-  const useCustom = () => { const minutes = Number(String(custom).replace(',', '.')); if (minutes > 0) { onChange(t => setDuration(t, minutes)); setCustom('') } }
+  const useCustom = (value = custom) => { const minutes = Number(String(value).replace(',', '.')); if (minutes > 0) { onChange(t => setDuration(t, minutes)); setCustom('') } }
   return <div class="presenter-timer" style={{ display: 'flex', flexDirection: 'column', gap: '8px', ...style }}>
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
       <span class="presenter-timer-time" style={{ fontVariantNumeric: 'tabular-nums', fontSize: '26px', fontWeight: 400, color: left === 0 ? '#ff6b6b' : left <= 60000 ? '#ffcc4d' : timer.running ? '#f0f0f0' : '#888' }}>{formatTime(left)}</span>
@@ -35,11 +35,20 @@ export function TimerPanel({ timer, onChange, style }) {
     </div>
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', alignItems: 'center' }}>
       {TIMER_PRESETS.map(minutes => <button style={{ ...small, ...on(timer.duration === minutes * 60000) }} title={`${minutes} minutes`} onClick={() => onChange(t => setDuration(t, minutes))}>{minutes}′</button>)}
-      <input type="text" inputmode="decimal" placeholder="min" aria-label="Minutes" value={custom} onInput={event => setCustom(event.currentTarget.value)} onKeyDown={event => { if (event.key === 'Enter') useCustom() }} onBlur={useCustom}
+      <input type="text" inputmode="decimal" placeholder="min" aria-label="Minutes" value={custom} onInput={event => setCustom(event.currentTarget.value)} onKeyDown={event => { if (event.key === 'Enter') useCustom(event.currentTarget.value) }} onBlur={event => useCustom(event.currentTarget.value)}
         style={{ ...S.select, width: '52px', padding: '4px 6px' }} />
     </div>
     <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }} role="group" aria-label="Where the room sees the countdown">
       {Object.keys(PLACES).map(place => <button class="presenter-timer-place" data-place={place} style={{ ...small, ...on(timer.position === place) }} title={PLACES[place][1]} aria-pressed={timer.position === place} onClick={() => onChange(t => ({ ...t, position: place }))}>{PLACES[place][0]}</button>)}
     </div>
+    {sounds.length > 0 && <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }} role="group" aria-label="Sound at the end">
+      <select class="presenter-timer-sound" aria-label="Sound at the end" value={timer.sound ?? ''} onChange={event => { const sound = event.currentTarget.value || null; onChange(t => ({ ...t, sound })) }} style={{ ...S.select, width: 'auto', flex: 1, minWidth: 0, padding: '4px 6px' }}>
+        <option value="">No sound</option>
+        {sounds.map(({ name, src }) => <option value={src}>♪ {name}</option>)}
+      </select>
+      <input type="range" min="0" max="1" step="0.05" aria-label="Volume" title="Volume" value={timer.volume ?? 0.8} onChange={event => { const volume = Number(event.currentTarget.value); onChange(t => ({ ...t, volume })) }} style={{ width: '70px' }} />
+      <button class="presenter-timer-test" style={small} title="Play the sound once in the audience window" disabled={!timer.sound} onClick={() => onChange(testSound)}>Try</button>
+      <button class="presenter-timer-quiet" style={small} title="Stop the sound" disabled={!timer.sound} onClick={() => onChange(quietTimer)}>Stop</button>
+    </div>}
   </div>
 }

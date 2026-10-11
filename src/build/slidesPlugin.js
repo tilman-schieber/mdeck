@@ -131,6 +131,9 @@ export function collectLocalAssetRefs(markdown) {
 
   const deck = parseSlides(markdown)
   add(deck.deckConfig.meta?.logo)
+  // The countdown's end sounds, which builds take along and checks look for.
+  const sounds = deck.deckConfig.timer?.sounds
+  for (const file of Array.isArray(sounds) ? sounds : sounds && typeof sounds === 'object' ? Object.values(sounds) : []) if (typeof file === 'string') add(file)
   for (const slide of deck.slides) {
     add(slide.meta.image)
     add(slide.meta.logo)
