@@ -17,11 +17,16 @@
 //   { type: 'media', key, video, action, time }  a video in the deck played,
 //       paused or moved to `time` (components/VideoPlayer.jsx)
 //   { type: 'op', op }                  a change of the saved ink (applyOp)
+//   { type: 'timer', key, timer }       the talk's countdown (src/runtime/timer.js),
+//       when it changes and every few seconds from the window that set it
 // Keys start with the sending window's id, so strokes never mix.
 import { changeInk, renameSlide } from './store.js'
+import { decodeTimer, encodeTimer } from '../timer.js'
 
 const SEGMENT_MS = 60
 const DOT_MS = 50
+// A window that opens or reloads learns the countdown within this time.
+const TIMER_REPEAT_MS = 3000
 
 export function broadcastTransport(name) {
   if (typeof BroadcastChannel === 'undefined') return null
@@ -38,6 +43,8 @@ export function createInkBus(stage, transports) {
   const me = Math.random().toString(36).slice(2, 8)
   const send = message => { for (const transport of transports) transport.send(message) }
 
+  // The countdown last set here, and whether this window repeats it.
+  let timer = null, timerOwned = false
   // Strokes from others, by key: the points so far.
   const incoming = new Map()
   function receive(message) {
@@ -52,6 +59,9 @@ export function createInkBus(stage, transports) {
       if (message.from <= known.points.length) known.points = [...known.points.slice(0, message.from), ...message.points]
       incoming.set(message.key, known)
       stage.liveStroke(message.key, known)
+    } else if (message.type === 'timer') {
+      timerOwned = false
+      stage.dispatchEvent(new CustomEvent('talktimer', { detail: { timer: message.timer } }))
     } else if (message.type === 'controls') {
       stage.dispatchEvent(new CustomEvent('pollcontrols', { detail: { room: message.room, controls: message.controls } }))
     } else if (message.type === 'media') {
@@ -107,6 +117,19 @@ export function createInkBus(stage, transports) {
     if (!detail.point) { clearTimeout(dotTimer); dotTimer = null; sendDot(); return }
     dotTimer ??= setTimeout(sendDot, DOT_MS)
   })
+
+  // The countdown set here (presenter view → its slide frame): the others
+  // follow. This window repeats it while it runs or shows, until another
+  // window sets it, so a window that opens later or reloads catches up.
+  const sendTimer = () => send({ type: 'timer', key: `${me}:timer`, timer: encodeTimer(timer) })
+  stage.addEventListener('talktimer', ({ detail }) => {
+    if (!detail?.local) return
+    timer = decodeTimer(detail.timer)
+    if (!timer) return
+    timerOwned = true
+    sendTimer()
+  })
+  setInterval(() => { if (timerOwned && timer && (timer.running || timer.visible)) sendTimer() }, TIMER_REPEAT_MS)
 
   // An activity's controls changed here: the others follow.
   stage.addEventListener('pollcontrols', ({ detail }) => {

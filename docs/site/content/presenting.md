@@ -113,6 +113,16 @@ Start either with `mdeck run talk.en.md`: the presenter view gets a **Language**
 
 `mdeck send talk.de.md` makes the German file to hand out; each file is a complete deck of its own.
 
+## Show a countdown to the room
+
+For group work or an exercise, the presenter view has a **Countdown** that the room can see: in the speaker layout below the steering note, in the iPad's slide-only layout behind the ⏱ button.
+
+- Choose its length (1, 3, 5, 10, 15 or 30 minutes, or type a number), then start and pause it; **+1′** adds a minute, the round arrow starts it over.
+- The eye shows it in the audience window or hides it again. It keeps running while hidden.
+- The arrows put it in a corner, the dot big in the middle of the screen. In its last minute it turns amber, at the end red.
+
+It follows from any screen of the talk: started on a paired iPad, the audience window and the laptop's presenter view show the same time, and a window opened or reloaded later catches up within a few seconds.
+
 ## Reveal points one at a time
 
 Wrap a list in a steps block:

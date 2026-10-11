@@ -11,6 +11,9 @@ import { resolvePalette } from '../extensions/appearance.js'
 import { palettesFor } from '../extensions/tokens.js'
 import { S, PaletteSwatches } from './chrome.jsx'
 import { SlideErrorBoundary } from './SlideErrorBoundary.jsx'
+import { TimerPanel, useTimerTick } from './TimerPanel.jsx'
+import { mountTalkTimer } from './TimerOverlay.jsx'
+import { newTimer, encodeTimer, decodeTimer, followTimer, formatTime, timeLeft } from './timer.js'
 import { createEditorBridge } from './editorBridge.js'
 import { ReaderView } from './ReaderView.jsx'
 import { configureLive, announce, setLookSource, actAsPresenter, useSteering, setSavedResults } from '../live/client.js'
@@ -272,6 +275,15 @@ function PresenterView({ deckConfig: firstConfig, slides: firstSlides }) {
   const [themeModalOpen, setThemeModalOpen] = useState(false)
   const [elapsed, setElapsed] = useState(0)
   const [timerRunning, setTimerRunning] = useState(false)
+  // The countdown the room may see (timer.js): set here, passed to the slide
+  // frame, which tells every other screen; what others set comes back here.
+  const [talkTimer, setTalkTimerState] = useState(() => newTimer(5))
+  const talkTimerRef = useRef(talkTimer)
+  const [timerOpen, setTimerOpen] = useState(false)
+  const setTalkTimer = next => { talkTimerRef.current = next; setTalkTimerState(next) }
+  // `change` builds on the latest timer, so quick taps one after another all count.
+  const changeTimer = change => { const next = change(talkTimerRef.current); setTalkTimer(next); sendTo(iframeRef.current?.contentWindow, 'timer', encodeTimer(next)) }
+  useTimerTick(talkTimer)
   const timerRef = useRef(null)
 
   const iframeRef = useRef(null)
@@ -336,12 +348,15 @@ function PresenterView({ deckConfig: firstConfig, slides: firstSlides }) {
         return
       }
       if (source !== iframeRef.current?.contentWindow) return
+      if (data?.talkTimer) { const next = decodeTimer(data.talkTimer); if (next) setTalkTimer(followTimer(talkTimerRef.current, next)); return }
       if (typeof data?.inkMode === 'boolean') { setInking(data.inkMode); return }
       // Another screen (a paired iPad) switched the language; the notes follow.
       if (LANGUAGES.includes(data?.deckLanguage)) { setLang(data.deckLanguage); return }
       if (!data?.deckStateChanged) return
       const state = data.deckStateChanged
       const i = state.index
+      // A reloaded slide frame (a new theme) shows the countdown again.
+      if (data.reason === 'init') { const timer = talkTimerRef.current; if (timer.running || timer.visible) sendTo(iframeRef.current?.contentWindow, 'timer', encodeTimer(timer)) }
       // Theme reloads must not reset the current reveal position.
       // A reloaded frame opens in the deck file's language; after its place
       // is back, it gets the one shown.
@@ -484,6 +499,7 @@ function PresenterView({ deckConfig: firstConfig, slides: firstSlides }) {
           <span style={{ padding: '0 8px', color: '#888' }}>{index + 1}/{slides.length}</span>
           <ConnectedViews presence={presence} phones={hasActivities()} style={{ color: '#888', padding: '0 6px' }} />
           <button style={{ ...pill, color: timerRunning ? '#f0f0f0' : '#777' }} title="Start or pause the timer" onClick={() => setTimerRunning(r => !r)}>{clock}</button>
+          <button class="presenter-countdown" style={{ ...pill, ...(timerOpen ? { background: '#2a2a2a', color: '#fff' } : {}), ...(talkTimer.visible ? { color: '#ffcc4d' } : {}) }} title="Countdown for the room" aria-pressed={timerOpen} onClick={() => setTimerOpen(open => !open)}>{talkTimer.running || talkTimer.visible ? formatTime(timeLeft(talkTimer)) : '⏱'}</button>
           <button style={pill} title="Previous" aria-label="Previous" onClick={() => navCommand('prev')}><PresenterIcon name="prev" /></button>
           <button style={pill} title="Next" aria-label="Next" onClick={() => navCommand('next')}><PresenterIcon name="next" /></button>
           <button class="presenter-draw" title="Draw on the slide (D)" aria-pressed={inking} style={{ ...pill, ...(inking ? { background: '#e11d48', borderColor: '#e11d48', color: '#fff' } : {}) }} onClick={() => sendTo(iframeRef.current?.contentWindow, 'ink', 'toggle')}><PresenterIcon name="pen" /></button>
@@ -491,6 +507,11 @@ function PresenterView({ deckConfig: firstConfig, slides: firstSlides }) {
           <button class="presenter-notes" title="Notes (N)" aria-pressed={drawerOpen} style={{ ...pill, ...(drawerOpen ? { background: '#2a2a2a', color: '#fff' } : {}) }} onClick={() => setDrawerOpen(open => !open)}>Notes</button>
           {canFullscreen && <button class="presenter-fullscreen" style={pill} title={fullscreenLabel} aria-label={fullscreenLabel} aria-pressed={isFullscreen} onClick={() => fullscreen.toggle()}><PresenterIcon name={fullscreenIcon} /></button>}
           <button style={pill} title="Speaker layout: slide, notes and next slide side by side" onClick={() => chooseLayout('speaker')}><PresenterIcon name="speaker" /></button>
+        </div>
+      )}
+      {slideLayout && timerOpen && (
+        <div class="presenter-countdown-panel" style={{ position: 'fixed', top: 'calc(max(10px, env(safe-area-inset-top)) + 56px)', right: 'max(10px, env(safe-area-inset-right))', zIndex: 21, padding: '12px', borderRadius: '12px', background: 'rgba(17,17,17,0.94)', border: '1px solid #2a2a2a', color: '#ccc', fontFamily: 'ui-sans-serif, system-ui, sans-serif', fontSize: '13px' }}>
+          <TimerPanel timer={talkTimer} onChange={changeTimer} />
         </div>
       )}
       <aside class="presenter-aside" style={{
@@ -522,6 +543,11 @@ function PresenterView({ deckConfig: firstConfig, slides: firstSlides }) {
         </div>
 
         <SteeringNote />
+
+        <div style={{ flexShrink: 0 }}>
+          <span style={S.label}>Countdown</span>
+          <TimerPanel timer={talkTimer} onChange={changeTimer} />
+        </div>
 
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
           <span style={{ fontVariantNumeric: 'tabular-nums', fontSize: '22px', letterSpacing: '0.05em', color: timerRunning ? '#f0f0f0' : '#555', fontWeight: 300 }}>
@@ -850,6 +876,7 @@ async function init() {
     // Digits and Escape typed in the presenter view, and its hotspots switch.
     else if (ctrl.command === 'hotspotKey' && typeof ctrl.value === 'string') stage.hotspotKey(ctrl.value)
     else if (ctrl.command === 'hotspots') stage.hotspotsForced = ctrl.value
+    else if (ctrl.command === 'timer') stage.dispatchEvent(new CustomEvent('talktimer', { detail: { timer: ctrl.value, local: true } }))
   }
 
   // The same slide and step in another language, its words and mdeck's own;
@@ -950,6 +977,9 @@ async function init() {
       } : null })],
       onMode: inking => { if (embedded) window.parent.postMessage({ inkMode: inking }, window.location.origin) },
     })
+    // The presenter view shows the countdown as set on another screen; its
+    // own changes are not echoed, so an echo never undoes a newer tap.
+    if (embedded) inkStage.addEventListener('talktimer', event => { if (!event.detail?.local) window.parent.postMessage({ talkTimer: event.detail?.timer }, window.location.origin) })
     // Drawing turns itself on, with the laser and the toolbar folded into
     // its corner button, where it is wanted: in the presenter view on a
     // touch screen (an iPad), and in a deck window as soon as a pen touches
@@ -976,6 +1006,8 @@ async function init() {
     inkStage.setAttribute('data-follower', '')
     watchInk(inkStage, { storageKey: inkStorageKey, transports: [roomTransport({ receive: true, view: 'audience' })] })
   } else if (inkStage) watchInk(inkStage, { storageKey: inkStorageKey })
+  // The countdown, when the presenter shows it to the room; not in previews.
+  if (inkStage && (drawHere || audienceMode || followMode)) mountTalkTimer(inkStage)
 
   // A full deck or audience window is a presenter's screen; previews are
   // embedded, and a follower only watches.

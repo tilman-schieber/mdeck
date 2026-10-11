@@ -399,6 +399,23 @@ try {
   await ipad.evaluate(`${ipadFrame}.querySelector('deck-stage').setZoom({ scale: 2, x: 600, y: 400 })`)
   await until(projector2, "document.querySelector('deck-stage').zoom.scale === 2")
 
+  // The countdown: set, started, placed and shown on the iPad, the projector
+  // shows it big, holds it while paused and hides it again.
+  const tap = selector => ipad.evaluate(`document.querySelector(${JSON.stringify(selector)}).click()`)
+  const projectorTimer = "document.querySelector('.talk-timer')"
+  await ipad.evaluate("[...document.querySelectorAll('.presenter-timer button')].find(button => button.textContent === '3′').click()")
+  await tap('.presenter-timer-start')
+  await tap('.presenter-timer-place[data-place="center"]')
+  await tap('.presenter-timer-show')
+  await until(projector2, `${projectorTimer}?.classList.contains('talk-timer--center') && /^2:5\\d$/.test(${projectorTimer}.textContent)`)
+  await tap('.presenter-timer-start')
+  await delay(300)
+  const held = await projector2.evaluate(`${projectorTimer}.textContent`)
+  await delay(1500)
+  assert.equal(await projector2.evaluate(`${projectorTimer}.textContent`), held, 'a paused countdown holds')
+  await tap('.presenter-timer-show')
+  await until(projector2, `!${projectorTimer}`)
+
   // A video file played, paused or moved on the iPad does the same on the
   // projector, which plays it (silently, with a sound button, if nobody has
   // clicked it yet); the iPad's own copy goes silent while the projector
@@ -698,7 +715,7 @@ try {
   assert.equal(await flow.evaluate(`${flowStage}.state.step`), 1, 'two presses show the whole drawing')
   await flow.close()
 
-  console.log('Browser checks passed: custom layout rendering, reveal/undo/reset synchronization, session isolation, launch page, poll relay, scale, open questions, word cloud and join code, several answers with keys, closing and the right answer on the phones, options as a list, numbers, results kept beside the deck and shown in a build, saved ink, drawing, drawing in the presenter view, touch (fingers swipe through slides), straight lines (snapping to 15° steps) and their end points, select and move, laser, zoom, saving ink in dev, following on another device, a second device through the stage room, video played on the iPad playing on the projector, a deck in three languages (the switch, the audience and a follower, right to left), and in one browser without a server (also with a standalone server for the polls), hotspots (keys on the presenter slide, flights the audience follows, leaving them), and a drawing that builds up in numbered steps with parts to zoom to, with ids of its own on each slide.')
+  console.log('Browser checks passed: custom layout rendering, reveal/undo/reset synchronization, session isolation, launch page, poll relay, scale, open questions, word cloud and join code, several answers with keys, closing and the right answer on the phones, options as a list, numbers, results kept beside the deck and shown in a build, saved ink, drawing, drawing in the presenter view, touch (fingers swipe through slides), straight lines (snapping to 15° steps) and their end points, select and move, laser, zoom, the countdown, saving ink in dev, following on another device, a second device through the stage room, video played on the iPad playing on the projector, a deck in three languages (the switch, the audience and a follower, right to left), and in one browser without a server (also with a standalone server for the polls), hotspots (keys on the presenter slide, flights the audience follows, leaving them), and a drawing that builds up in numbered steps with parts to zoom to, with ids of its own on each slide.')
 } finally {
   await browser?.close()
   await tablet2?.close()

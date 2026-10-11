@@ -1,0 +1,35 @@
+/* The talk's countdown over the slides (TimerOverlay.jsx): above the slides,
+   below the drawing toolbar, never in the way of a tap. */
+.talk-timer {
+  position: fixed;
+  z-index: 2147481000;
+  pointer-events: none;
+  font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.74);
+  border-radius: 0.22em;
+  padding: 0.12em 0.32em;
+  font-size: clamp(36px, 10vh, 160px);
+  box-shadow: 0 0.06em 0.3em rgba(0, 0, 0, 0.35);
+  direction: ltr;
+}
+.talk-timer--top-right { top: 2.5vh; right: 2vw; }
+.talk-timer--top-left { top: 2.5vh; left: 2vw; }
+.talk-timer--bottom-right { bottom: 2.5vh; right: 2vw; }
+.talk-timer--bottom-left { bottom: 2.5vh; left: 2vw; }
+.talk-timer--center {
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: clamp(90px, 34vh, 520px);
+  background: rgba(0, 0, 0, 0.8);
+}
+.talk-timer[data-ending] { color: #ffcc4d; }
+.talk-timer[data-done] { color: #ff6b6b; animation: talk-timer-done 0.9s ease-in-out 4; }
+@keyframes talk-timer-done { 50% { opacity: 0.25; } }
+@media (prefers-reduced-motion: reduce) { .talk-timer[data-done] { animation: none; } }
+@media print { .talk-timer-host { display: none !important; } }
