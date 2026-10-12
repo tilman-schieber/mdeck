@@ -28,6 +28,7 @@ import { claimPairing } from '../live/pairing.js'
 import { strokePath } from '../core/ink.js'
 import { inkFileName } from 'virtual:deck-ink'
 import savedResults from 'virtual:deck-results'
+import sharedSounds from 'virtual:shared-sounds'
 import { roomsIn, roomsOnSlide, findRoomTag, slideTitleFor } from '../live/roomTag.js'
 import { expandPollLists } from '../core/pollList.js'
 import './reader.css'
@@ -208,6 +209,13 @@ function usePresence() {
   return presence
 }
 
+// The countdown's sounds: the deck's own, then those every deck shares
+// (~/.mdeck/sounds, mdeck's sounds/), a name the deck uses only once.
+function countdownSounds(deckConfig) {
+  const own = timerSounds(deckConfig)
+  return [...own, ...sharedSounds.filter(sound => !own.some(mine => mine.name === sound.name))]
+}
+
 function PresenterView({ deckConfig: firstConfig, slides: firstSlides }) {
   const [index, setIndex] = useState(0)
   // The notes, slide count and phones follow the language shown.
@@ -277,8 +285,8 @@ function PresenterView({ deckConfig: firstConfig, slides: firstSlides }) {
   const [timerRunning, setTimerRunning] = useState(false)
   // The countdown the room may see (timer.js): set here, passed to the slide
   // frame, which tells every other screen; what others set comes back here.
-  const sounds = useMemo(() => timerSounds(deckConfig), [deckConfig])
-  const [talkTimer, setTalkTimerState] = useState(() => newTimer(5, { sound: timerSounds(deckConfig)[0]?.src ?? null }))
+  const sounds = useMemo(() => countdownSounds(deckConfig), [deckConfig])
+  const [talkTimer, setTalkTimerState] = useState(() => newTimer(5, { sound: countdownSounds(deckConfig)[0]?.src ?? null }))
   const talkTimerRef = useRef(talkTimer)
   const [timerOpen, setTimerOpen] = useState(false)
   const setTalkTimer = next => { talkTimerRef.current = next; setTalkTimerState(next) }

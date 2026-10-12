@@ -101,7 +101,10 @@ timer:
 ```
 
 The presenter view's countdown offers these to play when it ends (or a list
-of files, named after themselves). The first is chosen at the start. The
+of files, named after themselves), and after them the sounds every deck
+shares: the audio files in `~/.mdeck/sounds` and in mdeck's own `sounds/`
+folder, each named after its file (`Gong.mp3` is Gong). `mdeck run` serves
+those; a build carries only the deck's own. The first is chosen at the start. The
 sound plays in the audience window, or, while no other screen shows the
 deck, in the presenter view's slide frame; never on a paired iPad's own
 speaker while the projector is connected, nor on phones. A browser plays

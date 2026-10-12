@@ -9,6 +9,7 @@ import { stripNotes as stripNotesFrom, stripActivities as stripActivitiesFrom } 
 import { componentFolders, componentFiles } from './components.js'
 import { inkFileFor, normalizeInk, emptyInk } from '../core/ink.js'
 import { resultsFileFor, normalizeResults } from '../core/results.js'
+import { sharedSounds, soundList, soundsMiddleware, SOUND_ROUTE } from './sharedSounds.js'
 import { isOwnWrite } from './ownWrites.js'
 import { fileURLToPath } from 'node:url'
 import { assertDrawings } from './drawings.js'
@@ -32,6 +33,8 @@ const BIB_ID = 'virtual:bibliography'
 const RESOLVED_BIB_ID = '\0virtual:bibliography'
 const RESULTS_ID = 'virtual:deck-results'
 const RESOLVED_RESULTS_ID = '\0virtual:deck-results'
+const SOUNDS_ID = 'virtual:shared-sounds'
+const RESOLVED_SOUNDS_ID = '\0virtual:shared-sounds'
 
 const MIME_BY_EXT = {
   '.png': 'image/png',
@@ -289,6 +292,7 @@ export function slidesPlugin(slidesPath, { languages = false, inlineImages = fal
     name: 'vite-plugin-slides',
     configResolved(config) { serving = config.command === 'serve' },
     configureServer(server) {
+      server.middlewares.use(SOUND_ROUTE, soundsMiddleware())
       server.watcher.add([abs, inkPath, ...watchDirs()])
       const refresh = file => {
         if (isWatched(file)) reload(server, ALL_IDS, resolve(file))
@@ -307,6 +311,7 @@ export function slidesPlugin(slidesPath, { languages = false, inlineImages = fal
       if (id === SVGS_ID) return RESOLVED_SVGS_ID
       if (id === BIB_ID) return RESOLVED_BIB_ID
       if (id === RESULTS_ID) return RESOLVED_RESULTS_ID
+      if (id === SOUNDS_ID) return RESOLVED_SOUNDS_ID
     },
     load(id) {
       if (id === RESOLVED_ID) {
@@ -362,6 +367,8 @@ export function slidesPlugin(slidesPath, { languages = false, inlineImages = fal
       // The answers kept in the talk (<deck>.results.json): builds show them
       // where no room server is (src/live/client.js). `mdeck run` shows the
       // live answers, and writes the file, so it does not read it here.
+      // The countdown's shared sounds, served by `mdeck run` (sharedSounds.js); a build carries none.
+      if (id === RESOLVED_SOUNDS_ID) return `export default ${JSON.stringify(serving ? soundList(sharedSounds()) : [])}`
       if (id === RESOLVED_RESULTS_ID) {
         let data = normalizeResults({})
         if (results && !serving && existsSync(resultsPath)) {

@@ -4,3 +4,6 @@ dist/
 *.local
 .mdeck-backups/
 .mdeck-snapshots/
+
+# Sound files for the countdown (src/build/sharedSounds.js) stay on this computer
+sounds/

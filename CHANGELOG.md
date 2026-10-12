@@ -8,6 +8,7 @@
 - The slide-writing skill draws diagrams as SVG in the palette's colours, builds them up with numbered steps and checks them in light and dark.
 - A countdown the room can see: the presenter view's **Countdown** (behind ⏱ in the iPad's layout) sets its length, starts, pauses and adds a minute, and shows it in the audience window, in a corner or big in the middle. Its last minute is amber, its end red. It follows from any screen, a paired iPad too, and windows that open later catch up.
 - The countdown can play a sound when it ends: `timer: { sounds: { Gong: ./sounds/gong.mp3, Pause: ./sounds/pause.m4a } }` in the deck's settings, chosen in the presenter view with its volume, **Try** and **Stop**. It plays in the audience window (or the presenter view's slide frame while no other screen shows the deck), which offers **Click for sound** until the browser lets it play. Folder builds take the files along, and `mdeck check` reports missing ones.
+- Sounds for every deck's countdown: the audio files in `~/.mdeck/sounds` (or `$MDECK_HOME/sounds`) and in mdeck's own `sounds/` folder, each named after its file, follow a deck's own `timer.sounds` in the presenter view. `mdeck run` serves them, with byte ranges for Safari.
 
 ## 3.10.1 — 2026-10-11
 
