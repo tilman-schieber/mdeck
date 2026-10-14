@@ -9,12 +9,17 @@ import https from 'node:https'
 
 // In the dev server only the presenter's own browser, on this computer and on
 // a page this server served, or a paired device (src/build/pairing.js) may
-// reset rooms; phones in the network may answer.
-export function livePlugin({ pairing = null, upstream = null, key = null, session = () => null } = {}) {
+// reset rooms; phones in the network may answer. With `position`
+// (src/build/positionFile.js) the stage room keeps the slide the talk is on,
+// for the presenter view to offer after a restart.
+export function livePlugin({ pairing = null, upstream = null, key = null, session = () => null, position = null } = {}) {
   return {
     name: 'vite-plugin-mdeck-live',
     configureServer(server) {
-      const rooms = createRooms()
+      const stage = () => `${session()}.stage`
+      // Only changes count (`at`), not a window that just opened.
+      const rooms = createRooms({ onState: (id, state) => { if (position && id === stage() && state?.at) position.save(state.slideId) } })
+      server.httpServer?.once('close', () => position?.flush())
       const handler = liveHandler({
         rooms,
         canReset: (request, room) => isAllowedRequest(request) || (!!pairing?.allows(request) && (room == null || room === session() || room.startsWith(`${session()}.`))),

@@ -1,5 +1,6 @@
 # What mdeck run, send and pdf leave beside the deck while trying it out
 *.results.json
 *.drawings.json
+*.position.json
 *.html
 *.pdf

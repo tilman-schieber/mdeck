@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- After a restart of `mdeck run` the presenter view offers to go on where the talk was: "Last time: slide 12, …" with **Go on there**, at the slide's start, while it is still on the first slide. Nothing moves on its own. The slide is kept beside the deck in `<deck>.position.json` and found again by its id; a slide the deck no longer has is not offered. The launch page shows it too and can forget it.
 - Fixed: after a restart of `mdeck run`, a presenter view opened or reloaded took the audience window on the projector back to the first slide, while it showed the slide the talk was on itself. A window that just opened no longer moves another, and the windows still open say where they are when they connect again, so a presenter view opened then takes up the projector's slide.
 - Fixed (since 3.13.0): opening the presenter view on an iPad, or reloading it, took the laptop back to the first slide when nobody had changed slides for 15 s. A screen that went quiet holds the phones no longer, but the stage room hears of a slide once and not again, so there a presenter who stays on a slide kept it from no one; it keeps it now.
 - `mdeck --help` lists the commands, one line each; `mdeck <command> --help` shows a command's options. The help no longer suggests `npm link`, and the guides say `npm install -g mdeck` where they did.

@@ -30,7 +30,8 @@ const HOUR = 60 * 60 * 1000
 // longer has closed, such as a talk given earlier on this server.
 const QUIET_MS = 15000
 
-export function createRooms({ maxMessages = 5000, maxInk = 5000, maxRooms = 500, idleMs = 12 * HOUR, now = Date.now, quietMs = QUIET_MS } = {}) {
+// `onState(id, state)` hears each change of a room's state.
+export function createRooms({ maxMessages = 5000, maxInk = 5000, maxRooms = 500, idleMs = 12 * HOUR, now = Date.now, quietMs = QUIET_MS, onState = null } = {}) {
   const rooms = new Map()
   const prune = () => { for (const [id, room] of rooms) if (!room.listeners.size && now() - room.touched > idleMs) rooms.delete(id) }
   const get = id => {
@@ -111,6 +112,7 @@ export function createRooms({ maxMessages = 5000, maxInk = 5000, maxRooms = 500,
       if (JSON.stringify(next) === JSON.stringify(room.state)) return true
       room.state = next
       broadcast(room, { type: 'state', state: room.state })
+      onState?.(id, next)
       return true
     },
     // Live ink (src/runtime/ink/bus.js): passed on at once and not kept,

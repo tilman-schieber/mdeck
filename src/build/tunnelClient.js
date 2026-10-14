@@ -57,7 +57,7 @@ export function shareable(address, method, { base, resources = new Set(), sessio
   if (parts.some(part => part.startsWith('.') && part !== '.vite')) return false
   if (rest === '__mdeck/ink') return method === 'GET'
   if (rest === '__mdeck/ink/ops' || rest === '__mdeck/pair/claim') return method === 'POST'
-  if (rest === '__mdeck/live/info') return READ.has(method)
+  if (rest === '__mdeck/live/info' || rest === '__mdeck/position') return READ.has(method)
   const room = rest.match(/^__mdeck\/live\/rooms\/([^/]+)(\/events|\/state|\/reset|\/ink)?$/)
   if (room && session && (room[1] === session || room[1].startsWith(`${session}.`))) return room[2] === '/events' ? method === 'GET' : method === 'POST'
   if (rest.startsWith('__mdeck/')) return false

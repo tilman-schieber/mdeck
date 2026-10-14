@@ -83,8 +83,9 @@ export async function liveStatus(live, { key = null, fetch: get = fetch, timeout
 // guides; `fetch` reaches the server. All are injected so tests can run
 // without a browser or network. `resultsFile` and `inkFile` are the ones the
 // running server writes (resultsPlugin, inkPlugin), so that answers and
-// drawings dropped here are not written back from memory.
-export function homeMiddleware(slidesPath, { urls = () => ({ local: [], network: [] }), services = {}, pairing = null, relay = null, server: serverAddress = null, run = runCli, open = reveal, serverKey = process.env.MDECK_SERVER_KEY || null, fetch: get = fetch, resultsFile = null, inkFile = null } = {}) {
+// drawings dropped here are not written back from memory; `positionFile`,
+// the slide the talk was on, is the stage room's (src/live/server.js).
+export function homeMiddleware(slidesPath, { urls = () => ({ local: [], network: [] }), services = {}, pairing = null, relay = null, server: serverAddress = null, run = runCli, open = reveal, serverKey = process.env.MDECK_SERVER_KEY || null, fetch: get = fetch, resultsFile = null, inkFile = null, positionFile = null } = {}) {
   const abs = resolve(slidesPath)
   const outputs = outputsFor(abs)
   const jobs = {}
@@ -125,6 +126,7 @@ export function homeMiddleware(slidesPath, { urls = () => ({ local: [], network:
       chrome: !!findChrome(),
       results: answers()?.map(({ answers: _, ...question }) => question) ?? null,
       drawings: drawings(),
+      resume: resume(),
       services: Object.fromEntries(Object.keys(services).map(key => [key, serviceUrls[key] ?? null])),
       outputs: Object.fromEntries(Object.entries(outputs).map(([key, output]) => [key, {
         title: output.title,
@@ -193,6 +195,16 @@ export function homeMiddleware(slidesPath, { urls = () => ({ local: [], network:
     return [...shown, ...gone]
   }
 
+  // The slide the talk was on (<deck>.position.json), which the presenter
+  // view offers to go on from, with its number and title; null for the first.
+  function resume() {
+    const kept = positionFile?.resume()
+    if (!kept) return null
+    let deck
+    try { deck = parseSlides(expandedSource(abs)) } catch { return null }
+    return { slide: kept.index + 1, title: slideTitle(deck.slides[kept.index], kept.index, null) }
+  }
+
   // GET /results?format=csv|summary|json: the answers as a file to save.
   function download(request, response) {
     const format = new URL(request.url, 'http://localhost').searchParams.get('format') ?? 'csv'
@@ -243,6 +255,7 @@ export function homeMiddleware(slidesPath, { urls = () => ({ local: [], network:
     // Dropping kept answers (one question's `room`, or all) and drawings
     // (one `slide`, or all).
     if (action === 'drop-answers') { kept().drop(typeof room === 'string' ? room : null); return { ok: true } }
+    if (action === 'drop-position') { positionFile?.drop(); return { ok: true } }
     if (action === 'drop-drawings') { ink().drop(typeof slide === 'string' ? slide : null); return { ok: true } }
     if (action === 'reveal') {
       const target = outputs[output]?.file ?? (output === 'deck' ? abs : null)
@@ -269,7 +282,7 @@ export function homeMiddleware(slidesPath, { urls = () => ({ local: [], network:
   }
 }
 
-export function homePlugin(slidesPath, { services, pairing, relay = null, server: serverAddress = null, resultsFile = null, inkFile = null } = {}) {
+export function homePlugin(slidesPath, { services, pairing, relay = null, server: serverAddress = null, resultsFile = null, inkFile = null, positionFile = null } = {}) {
   return {
     name: 'vite-plugin-mdeck-home',
     configureServer(server) {
@@ -282,7 +295,7 @@ export function homePlugin(slidesPath, { services, pairing, relay = null, server
         response.writeHead(302, { Location: `${base}home.html` })
         response.end()
       })
-      server.middlewares.use('/__mdeck/home', homeMiddleware(slidesPath, { urls: () => server.resolvedUrls, services, pairing, relay, server: serverAddress, resultsFile, inkFile }))
+      server.middlewares.use('/__mdeck/home', homeMiddleware(slidesPath, { urls: () => server.resolvedUrls, services, pairing, relay, server: serverAddress, resultsFile, inkFile, positionFile }))
     },
   }
 }

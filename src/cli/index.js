@@ -17,6 +17,7 @@ import { expandedSource } from '../build/include.js'
 import { livePlugin, startLiveServer } from '../live/server.js'
 import { inkPlugin } from '../build/inkPlugin.js'
 import { resultsPlugin } from '../build/resultsPlugin.js'
+import { createPositionFile, positionPlugin } from '../build/positionFile.js'
 import { timingPlugin } from '../build/timingPlugin.js'
 import { createPairing, pairingPlugin } from '../build/pairing.js'
 import { isAllowedRequest } from '../build/editorPlugin.js'
@@ -692,11 +693,13 @@ if (command === 'new') {
   // The launch page drops answers and drawings through the files these write.
   const saving = request => isAllowedRequest(request) || pairing.allows(request)
   const ink = inkPlugin(abs, { authorize: saving }), results = resultsPlugin(abs, { authorize: saving })
+  // The slide the talk was on, for the presenter view to offer after a restart.
+  const position = createPositionFile(abs, { slides: () => parseSlides(expandedSource(abs)).slides.map(slide => slide.id) })
   const server = await createServer({
     ...base,
     // A paired iPad may save ink and steer the rooms, like this computer.
     ...(relay ? { base: relay.base } : {}),
-    plugins: [...(relay ? [stripRelayBase(relay.base)] : []), ...base.plugins, homePlugin(abs, { services, pairing, relay, server: relay?.server ?? null, resultsFile: results.api.file, inkFile: ink.api.file }), pairingPlugin(pairing), livePlugin({ pairing, upstream, key: process.env.MDECK_SERVER_KEY, session: () => sessionCode(parseSlides(readFileSync(abs, 'utf8')).deckConfig) }), ink, results, timingPlugin(abs, { authorize: saving })],
+    plugins: [...(relay ? [stripRelayBase(relay.base)] : []), ...base.plugins, homePlugin(abs, { services, pairing, relay, server: relay?.server ?? null, resultsFile: results.api.file, inkFile: ink.api.file, positionFile: position }), pairingPlugin(pairing), livePlugin({ pairing, upstream, key: process.env.MDECK_SERVER_KEY, session: () => sessionCode(parseSlides(readFileSync(abs, 'utf8')).deckConfig), position }), ink, results, positionPlugin(position, { authorize: saving }), timingPlugin(abs, { authorize: saving })],
     publicDir: dirname(abs),
     server: {
       ...base.server,
