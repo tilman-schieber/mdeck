@@ -6,6 +6,7 @@ import Question from '../components/Question.jsx'
 import WordCloud from '../components/WordCloud.jsx'
 import Scale from '../components/Scale.jsx'
 import Numeric from '../components/Numeric.jsx'
+import Pinpoint from '../components/Pinpoint.jsx'
 import Bibliography from '../components/Bibliography.jsx'
 import Data from '../components/Data.jsx'
 import deckComponents from 'virtual:deck-components'
@@ -26,6 +27,7 @@ export const registry = {
   wordcloud: WordCloud,
   scale: Scale,
   numeric: Numeric,
+  pinpoint: Pinpoint,
   bibliography: Bibliography,
   data: Data,
   ...deckComponents,

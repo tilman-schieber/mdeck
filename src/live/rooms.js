@@ -3,6 +3,8 @@
 // new kind of activity (poll, word cloud, questions) needs no server change.
 // A room also has one state value that only the presenter sets: the deck's
 // session room holds the activity on screen, which the answer page shows.
+// It may also hold one picture, the one the activity on screen shows
+// (<pinpoint>), which the next replaces.
 // Everything lives in memory: nothing is written to disk, and idle rooms are
 // forgotten. The same handler runs inside `mdeck run` and as `mdeck server`.
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
@@ -38,7 +40,7 @@ export function createRooms({ maxMessages = 5000, maxInk = 5000, maxRooms = 500,
   const rooms = new Map()
   const broadcast = (room, event) => { for (const listener of room.listeners) listener(event) }
   // A room that only listeners opened, before anything was said in it.
-  const empty = room => !room.messages.length && room.state === null && !room.ink.length
+  const empty = room => !room.messages.length && room.state === null && !room.ink.length && !room.image
   // Forgotten when the server is full: idle rooms, then empty ones. Their
   // listeners' streams end, and a browser's EventSource opens a new one, so
   // a room that is still wanted comes back at once.
@@ -60,7 +62,7 @@ export function createRooms({ maxMessages = 5000, maxInk = 5000, maxRooms = 500,
       if (rooms.size >= maxRooms) throw Object.assign(new Error('Too many rooms are open on this server'), { status: 503 })
       // Message numbers start at the time: those of a server that restarted
       // stay below the ones given before, so a closed poll stays closed.
-      room = { messages: [], state: null, stamp: 0, heard: 0, screens: new Map(), ink: [], listeners: new Set(), present: new Map(), next: Math.max(1, now()), touched: now() }
+      room = { messages: [], state: null, image: null, stamp: 0, heard: 0, screens: new Map(), ink: [], listeners: new Set(), present: new Map(), next: Math.max(1, now()), touched: now() }
       rooms.set(id, room)
     }
     room.touched = now()
@@ -146,6 +148,14 @@ export function createRooms({ maxMessages = 5000, maxInk = 5000, maxRooms = 500,
       return room.listeners.size
     },
     ink: id => get(id).ink,
+    // The picture phones show with the activity on screen, replacing the
+    // one before; its `version` names it in the phones' link to it.
+    setImage(id, { type, bytes }) {
+      const room = get(id)
+      room.image = { type, bytes, version: createHash('sha256').update(bytes).digest('base64url').slice(0, 16) }
+      return room.image.version
+    },
+    image: id => rooms.get(id)?.image ?? null,
     snapshot: id => get(id).messages,
     state: id => get(id).state,
     presence: id => { get(id); return presence(id) },
@@ -201,10 +211,13 @@ export function keyMatches(request, key) {
 const MAX_BODY = 4096
 const MAX_STATE = 32768
 const MAX_INK = 65536
+// A picture the presenter's screen made smaller for the phones (src/live/client.js).
+const MAX_IMAGE = 512 * 1024
+// Pictures only, never SVG: a page could run its scripts from here.
+const IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp'])
 
-function readBody(request, limit = MAX_BODY) {
+function readBytes(request, limit) {
   return new Promise((done, fail) => {
-    if (!/^application\/json\b/i.test(request.headers['content-type'] ?? '')) return fail(Object.assign(new Error('Send JSON'), { status: 415 }))
     let size = 0
     const chunks = []
     request.on('data', chunk => {
@@ -212,9 +225,15 @@ function readBody(request, limit = MAX_BODY) {
       if (size > limit) { request.pause(); fail(Object.assign(new Error('Message too large'), { status: 413, close: true })); return }
       chunks.push(chunk)
     })
-    request.on('end', () => { try { done(JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}')) } catch { fail(Object.assign(new Error('Not valid JSON'), { status: 400 })) } })
+    request.on('end', () => done(Buffer.concat(chunks)))
     request.on('error', fail)
   })
+}
+
+async function readBody(request, limit = MAX_BODY) {
+  if (!/^application\/json\b/i.test(request.headers['content-type'] ?? '')) throw Object.assign(new Error('Send JSON'), { status: 415 })
+  const bytes = await readBytes(request, limit)
+  try { return JSON.parse(bytes.toString('utf8') || '{}') } catch { throw Object.assign(new Error('Not valid JSON'), { status: 400 }) }
 }
 
 function reply(response, status, body) {
@@ -237,6 +256,9 @@ function reply(response, status, body) {
 //   POST /rooms/<id>/reset     presenter only
 //   POST /rooms/<id>/state     { state } — presenter only
 //   POST /rooms/<id>/ink       { messages } — presenter only, live ink
+//   POST /rooms/<id>/image     a JPEG, PNG or WebP — presenter only; the
+//                              picture the activity on screen shows
+//   GET  /rooms/<id>/image     that picture, for the phones
 // Answers carry no cookies and no personal data, so any page may use them.
 // `limit` and `reactionLimit` are per phone (its address and `from`), so a
 // lecture hall behind one address is not one sender; `addressLimit` is the
@@ -256,7 +278,7 @@ export function liveHandler({ rooms = createRooms(), canReset = () => false, inf
         response.writeHead(200, { 'Content-Type': ANSWER_TYPES[name.split('.').pop()], 'Cache-Control': 'no-cache', 'X-Content-Type-Options': 'nosniff' })
         return response.end(ANSWER_FILES[name])
       }
-      const match = pathname.match(/^\/rooms\/([^/]+)(\/events|\/presence|\/reset|\/state|\/ink)?$/)
+      const match = pathname.match(/^\/rooms\/([^/]+)(\/events|\/presence|\/reset|\/state|\/ink|\/image)?$/)
       if (!match) return next()
       const id = decodeURIComponent(match[1])
       if (!ROOM_RE.test(id)) return reply(response, 400, { error: 'Room names use letters, digits, dots, hyphens and underscores' })
@@ -284,6 +306,18 @@ export function liveHandler({ rooms = createRooms(), canReset = () => false, inf
         return
       }
       if (match[2] === '/presence' && request.method === 'GET') return reply(response, 200, rooms.presence(id))
+      if (match[2] === '/image' && request.method === 'GET') {
+        // A link to a picture since replaced finds none, so no phone keeps
+        // the wrong one in its cache under that link.
+        const image = rooms.image(id)
+        const wanted = searchParams.get('v')
+        if (!image || (wanted && wanted !== image.version)) return reply(response, 404, { error: 'This room has no such picture' })
+        const tag = `"${image.version}"`
+        const headers = { 'Cache-Control': 'public, max-age=43200', 'ETag': tag, 'X-Content-Type-Options': 'nosniff' }
+        if (request.headers['if-none-match'] === tag) { response.writeHead(304, headers); return response.end() }
+        response.writeHead(200, { ...headers, 'Content-Type': image.type, 'Content-Length': image.bytes.length })
+        return response.end(image.bytes)
+      }
       if (request.method !== 'POST') return reply(response, 405, { error: 'Method not allowed' })
       if (match[2] === '/ink') {
         if (!canReset(request, id)) return reply(response, 403, { error: 'Only the presenter can draw' })
@@ -291,6 +325,14 @@ export function liveHandler({ rooms = createRooms(), canReset = () => false, inf
         const { messages } = await readBody(request, MAX_INK)
         if (!Array.isArray(messages) || messages.length > 100) return reply(response, 400, { error: 'Send { messages: [...] }' })
         return reply(response, 200, { ok: true, listeners: rooms.relayInk(id, messages) })
+      }
+      if (match[2] === '/image') {
+        if (!canReset(request, id)) return reply(response, 403, { error: 'Only the presenter can show a picture' })
+        const type = String(request.headers['content-type'] ?? '').split(';')[0].trim().toLowerCase()
+        if (!IMAGE_TYPES.has(type)) return reply(response, 415, { error: 'Send a JPEG, PNG or WebP picture' })
+        const bytes = await readBytes(request, MAX_IMAGE)
+        if (!bytes.length) return reply(response, 400, { error: 'The picture is empty' })
+        return reply(response, 200, { ok: true, version: rooms.setImage(id, { type, bytes }) })
       }
       if (match[2] === '/reset' || match[2] === '/state') {
         if (!canReset(request, id)) return reply(response, 403, { error: 'Only the presenter can change a room' })
@@ -300,6 +342,10 @@ export function liveHandler({ rooms = createRooms(), canReset = () => false, inf
           // A screen turned away on the same activity as the one the phones
           // follow (the computer and its paired phone or iPad) is told so.
           if (!rooms.setState(id, state)) return reply(response, 200, { ok: true, ignored: true, ...(sameActivity(state, rooms.state(id)) ? { same: true } : {}) })
+          // Which picture the room holds, so a screen can send its own again
+          // when this server lost it (a restart) or another screen's replaced it.
+          const image = rooms.image(id)
+          if (image) return reply(response, 200, { ok: true, image: image.version })
         }
         return reply(response, 200, { ok: true })
       }

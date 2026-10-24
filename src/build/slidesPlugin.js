@@ -174,7 +174,8 @@ function inlineTagSources(markdown, baseDir, { media }) {
   })
 }
 
-const PICTURE_TAGS = new Set(['img'])
+// <pinpoint src="…"> shows its picture like an <img>.
+const PICTURE_TAGS = new Set(['img', 'pinpoint'])
 const MEDIA_TAGS = new Set(['video', 'audio', 'source', 'videoplayer'])
 
 function inlineYamlImageFields(markdown, baseDir) {

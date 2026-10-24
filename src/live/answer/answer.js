@@ -13,6 +13,8 @@
       right: 'Right!', wrong: 'Not quite. The right answer: {answer}', solution: 'The right answer: {answer}',
       number: 'A number', invalid: 'Enter a number, such as 0.5 or 1/2.', numberSent: 'Sent: {value}. Send another to change.',
       react: 'React',
+      pinPick: 'Tap the spot.', pinConfirm: 'Move the pin if needed, then send.', pinSent: 'Sent. Tap elsewhere and send again to change.', pinLoading: 'Loading the picture…',
+      pinWrong: 'Not quite: the circle shows the right spot.', pinSolution: 'The circle shows the right spot.',
     },
     de: {
       waiting: 'Die nächste Frage erscheint hier.', pick: 'Eine Antwort antippen.', thanks: 'Danke! Gewählt: „{choice}“. Zum Ändern eine andere antippen.', send: 'Senden', sent: 'Gesendet. Danke!', offline: 'Verbinde…',
@@ -20,6 +22,8 @@
       right: 'Richtig!', wrong: 'Leider nicht. Richtig ist: {answer}', solution: 'Richtig ist: {answer}',
       number: 'Eine Zahl', invalid: 'Eine Zahl eingeben, z. B. 0,5 oder 1/2.', numberSent: 'Gesendet: {value}. Zum Ändern eine andere senden.',
       react: 'Reagieren',
+      pinPick: 'Auf die Stelle tippen.', pinConfirm: 'Pin bei Bedarf verschieben, dann senden.', pinSent: 'Gesendet. Zum Ändern woanders tippen und erneut senden.', pinLoading: 'Bild wird geladen…',
+      pinWrong: 'Leider nicht: Der Kreis zeigt die richtige Stelle.', pinSolution: 'Der Kreis zeigt die richtige Stelle.',
     },
   }
   let words = FALLBACK[navigator.language?.slice(0, 2) === 'de' ? 'de' : 'en']
@@ -28,6 +32,8 @@
   let status = ''
   // What is typed into a field, kept while the page redraws.
   let draft = ''
+  // Where a <pinpoint> pin was put and not yet sent.
+  let pinDraft = null
 
   const me = (() => {
     try {
@@ -143,7 +149,7 @@
     controlSource.addEventListener('snapshot', take)
     controlSource.addEventListener('state', take)
     // Reset on the slide: this phone's answer went with the others.
-    controlSource.addEventListener('reset', () => { forget(room); status = ''; render() })
+    controlSource.addEventListener('reset', () => { forget(room); status = ''; pinDraft = null; render() })
   }
   // Once the right answer shows: whether this phone's was right, or what it is.
   const verdict = (answered, right, solution) => el('p', { class: `answer-verdict${answered ? (right ? ' is-right' : ' is-wrong') : ''}`, role: 'status' },
@@ -153,6 +159,29 @@
   async function answer(room, value) {
     const response = await fetch(new URL(`rooms/${encodeURIComponent(`${code}.${room}`)}`, base), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ from: me, data: { value } }) })
     if (!response.ok) throw new Error((await response.json().catch(() => ({}))).error ?? String(response.status))
+  }
+
+  // A tap on a <pinpoint> picture, as src/components/pinpoint.js reads it:
+  // { x, y } from 0 to 1. Whether it is inside the circle, measured in
+  // widths so the circle stays round (isInside there).
+  const tapOf = value => {
+    const x = Number(value?.x), y = Number(value?.y)
+    return Number.isFinite(x) && Number.isFinite(y) && x >= 0 && x <= 1 && y >= 0 && y <= 1 ? { x: Math.round(x * 10000) / 10000, y: Math.round(y * 10000) / 10000 } : null
+  }
+  const circleOf = value => ['x', 'y', 'r', 'ratio'].every(key => Number.isFinite(value?.[key])) ? value : null
+  const isInside = (tap, circle) => Math.hypot(tap.x - circle.x, (tap.y - circle.y) * circle.ratio) <= circle.r
+  const place = ({ x, y }) => `left: ${x * 100}%; top: ${y * 100}%;`
+  // The picture comes from this server (rooms/<code>/image), or from another
+  // site on https. One element, kept while the page redraws; a picture the
+  // server does not hold yet is asked for again a moment later.
+  const pictureUrl = image => typeof image?.url !== 'string' ? null : /^https:\/\//.test(image.url) ? image.url : /^rooms\//.test(image.url) ? new URL(image.url, base).href : null
+  let picture = null
+  const pictureFor = url => {
+    if (picture?.url === url) return picture.img
+    const img = el('img', { alt: '', draggable: 'false', src: url })
+    const own = picture = { url, img }
+    img.addEventListener('error', () => setTimeout(() => { if (picture === own) img.src = `${url}${url.includes('?') ? '&' : '?'}again=${Date.now()}` }, 2500))
+    return img
   }
 
   const FORMS = {
@@ -209,6 +238,43 @@
         form,
         statusLine(sent != null ? fill(words.numberSent, { value: sent }) : ''),
         solution ? verdict(sent != null, right, drawn(solution.html, solution.text)) : null,
+      ]
+    },
+    // { question, image: { url, ratio } }: a tap on the picture puts a pin
+    // there, Send sends it; the latest one counts. Once the right answer
+    // shows, the circle (`solution`) is drawn and the phone says whether its
+    // pin was inside. Without the picture yet, the phone waits for it.
+    pin(activity, room) {
+      const url = pictureUrl(activity.image)
+      if (!url) return [statusLine(words.pinLoading)]
+      let sent = null
+      try { sent = tapOf(JSON.parse(remembered(room) ?? 'null')) } catch {}
+      const pin = pinDraft ?? sent
+      const img = pictureFor(url)
+      const circle = controls.revealed ? circleOf(controls.solution) : null
+      const ratio = Number(activity.image.ratio) > 0 ? Number(activity.image.ratio) : null
+      const tap = event => {
+        if (controls.closed) return
+        const box = img.getBoundingClientRect()
+        if (!box.width || !box.height) return
+        const clamp = value => Math.min(1, Math.max(0, value))
+        pinDraft = tapOf({ x: clamp((event.clientX - box.left) / box.width), y: clamp((event.clientY - box.top) / box.height) })
+        status = ''
+        render()
+      }
+      const send = async () => {
+        if (!pinDraft) return
+        try { await answer(room, pinDraft); remember(room, JSON.stringify(pinDraft)); pinDraft = null; status = '' } catch (error) { status = error.message }
+        render()
+      }
+      return [
+        el('div', { class: `answer-picture${controls.closed ? ' is-closed' : ''}`, style: ratio ? `aspect-ratio: 1 / ${ratio};` : null, onclick: tap },
+          img,
+          circle && el('span', { class: 'answer-pin-target', style: `${place(circle)} width: ${circle.r * 200}%; height: ${(circle.r * 200) / circle.ratio}%;` }),
+          pin && el('span', { class: `answer-pin${pinDraft ? ' is-draft' : ''}`, style: place(pin) })),
+        el('button', { type: 'button', class: 'answer-send', disabled: !!controls.closed || !pinDraft, onclick: send }, words.send),
+        statusLine(pinDraft ? words.pinConfirm : sent ? words.pinSent : words.pinPick),
+        circle ? el('p', { class: `answer-verdict${sent ? (isInside(sent, circle) ? ' is-right' : ' is-wrong') : ''}`, role: 'status' }, sent ? (isInside(sent, circle) ? words.right : words.pinWrong) : words.pinSolution) : null,
       ]
     },
     // { question, placeholder, maxLength, once }: short text, as often as
@@ -290,7 +356,7 @@
     current = state
     if (state?.labels) words = { ...words, ...state.labels }
     applyLook(state?.look, state?.lang)
-    if (state?.room !== previous) { status = ''; draft = '' }
+    if (state?.room !== previous) { status = ''; draft = ''; pinDraft = null }
     followControls(state?.activity ? state.room : null)
     render()
   }

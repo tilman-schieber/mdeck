@@ -3,11 +3,16 @@
 // and show in builds, PDFs and files sent to readers.
 //
 //   { "version": 1, "rooms": { "<room>": { "savedAt": "…", "closed": false,
-//     "answers": [{ "phone": 1, "at": "…", "value": … }] } } }
+//     "answers": [{ "phone": 1, "at": "…", "value": … }], "solution": … } } }
+//
+// `solution` is the right answer as the slide knows it, where it has one:
+// for a <pinpoint>, the circle measured on its picture.
 //
 // Phones are numbered per room in the order they first answered; their own
 // ids never leave the room server. `answers` are those that counted: once an
 // activity was closed, the ones before.
+
+import { tapOf, tapText } from '../components/pinpoint.js'
 
 export const resultsFileFor = deckPath => String(deckPath).replace(/\.md$/i, '') + '.results.json'
 
@@ -35,16 +40,17 @@ export function normalizeResults(data) {
       savedAt: typeof entry.savedAt === 'string' ? entry.savedAt : null,
       closed: !!entry.closed,
       answers: entry.answers.filter(answer => answer && Number.isInteger(answer.phone)).map(({ phone, at, value }) => ({ phone, at: typeof at === 'string' ? at : null, value: value ?? null })),
+      ...(entry.solution != null && typeof entry.solution === 'object' ? { solution: entry.solution } : {}),
     }
   }
   return { version: 1, rooms }
 }
 
 /** One room's answers in, or (none) out; returns the new results. */
-export function withRoom(results, room, { answers, closed = false, savedAt = new Date().toISOString() }) {
+export function withRoom(results, room, { answers, closed = false, solution = null, savedAt = new Date().toISOString() }) {
   if (!ROOM_RE.test(room)) throw Object.assign(new Error('Room names use letters, digits, dots, hyphens and underscores'), { status: 400 })
   const rooms = { ...results.rooms }
-  if (Array.isArray(answers) && answers.length) rooms[room] = { savedAt, closed: !!closed, answers }
+  if (Array.isArray(answers) && answers.length) rooms[room] = { savedAt, closed: !!closed, answers, solution }
   else delete rooms[room]
   return normalizeResults({ rooms })
 }
@@ -52,7 +58,7 @@ export function withRoom(results, room, { answers, closed = false, savedAt = new
 export const serializeResults = results => JSON.stringify(results, null, 2) + '\n'
 
 const csvCell = value => {
-  const text = value == null ? '' : Array.isArray(value) ? value.join('|') : String(value)
+  const text = value == null ? '' : Array.isArray(value) ? value.join('|') : tapOf(value) ? tapText(tapOf(value)) : String(value)
   return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text
 }
 

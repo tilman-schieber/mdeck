@@ -63,3 +63,12 @@ footer { padding: 16px 20px; text-align: center; color: var(--muted); font-size:
 .answer-reactions button.is-sent { animation: answer-react .5s ease-out; }
 @keyframes answer-react { 30% { transform: scale(1.25); border-color: var(--accent); } 100% { transform: scale(1); } }
 @media (prefers-reduced-motion: reduce) { .answer-reactions button.is-sent { animation: none; border-color: var(--accent); } }
+/* <pinpoint>: the picture, the pin where it was tapped (dashed until sent),
+   and once the right answer shows, its circle. */
+.answer-picture { position: relative; width: 100%; margin: 0 0 14px; border-radius: 10px; overflow: hidden; background: color-mix(in srgb, var(--ink) 5%, transparent); cursor: crosshair; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+.answer-picture.is-closed { cursor: default; }
+.answer-picture img { display: block; width: 100%; height: auto; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; pointer-events: none; }
+.answer-pin { position: absolute; width: 26px; height: 26px; margin: -13px 0 0 -13px; border: 3px solid var(--bg); border-radius: 50%; background: var(--accent); box-shadow: 0 1px 4px rgba(0, 0, 0, .45); pointer-events: none; }
+.answer-pin.is-draft { background: transparent; border: 3px dashed var(--accent); box-shadow: 0 0 0 2px var(--bg); }
+.answer-pin-target { position: absolute; transform: translate(-50%, -50%); border: 3px solid #16a34a; border-radius: 50%; pointer-events: none; }
+.answer .answer-send { background: var(--accent); border-color: var(--accent); color: var(--on-accent, var(--bg)); }

@@ -165,12 +165,12 @@ export function setSavedResults(results) { savedRooms = results?.rooms ?? {} }
 // answers in that file (src/build/resultsPlugin.js), a moment after the last
 // one came in. Elsewhere there is nothing to keep them in.
 const keeping = new Map()
-export function keepAnswers(room, messages, { closed = false } = {}) {
+export function keepAnswers(room, messages, { closed = false, solution = null } = {}) {
   if (!import.meta.env?.DEV) return
   clearTimeout(keeping.get(room))
   keeping.set(room, setTimeout(() => {
     keeping.delete(room)
-    fetch(devPath('__mdeck/results'), { method: 'POST', headers: pairHeaders({ 'Content-Type': 'application/json' }), body: JSON.stringify({ room, closed, answers: keptAnswers(messages) }) }).catch(() => {})
+    fetch(devPath('__mdeck/results'), { method: 'POST', headers: pairHeaders({ 'Content-Type': 'application/json' }), body: JSON.stringify({ room, closed, answers: keptAnswers(messages), ...(solution != null ? { solution } : {}) }) }).catch(() => {})
   }, 800))
 }
 
@@ -304,7 +304,79 @@ const phoneWords = () => ({
   pickSeveral: t('poll.pickSeveral'), thanksSeveral: t('poll.thanksSeveral'), several: t('poll.several'),
   closed: t('respond.closed'), right: t('respond.right'), wrong: t('respond.wrong'), solution: t('respond.solution'),
   number: t('numeric.placeholder'), invalid: t('numeric.invalid'), numberSent: t('numeric.sent'),
+  pinPick: t('pinpoint.pick'), pinConfirm: t('pinpoint.confirm'), pinSent: t('pinpoint.sent'), pinLoading: t('pinpoint.loading'), pinWrong: t('pinpoint.wrong'), pinSolution: t('pinpoint.solution'),
 })
+
+// ── Pictures for the phones (<pinpoint>) ────────────────────────────────────
+
+// Phones never load the deck, so the presenter's screen sends them the
+// picture of the activity on screen through the room server: drawn smaller,
+// as WebP or JPEG (never SVG), on the deck's background where it is
+// transparent. The server holds one picture per session, the latest. A
+// picture from another site that may not be drawn is linked as it is, on https.
+const PICTURE_SIDE = 1600, PICTURE_BYTES = 500 * 1024
+// Each picture once, by its address: { blob, width, height, version } or { url, width, height }.
+const pictures = new Map()
+// The version the server holds, as it last said.
+let heldPicture = null
+
+// The <pinpoint> picture on the current slide, once it has loaded.
+async function loadedPicture(room) {
+  for (let tries = 0; tries < 30; tries++) {
+    const img = lookSource()?.querySelector?.(`img[data-pinpoint="${CSS.escape(room)}"]`)
+    if (img?.complete && img.naturalWidth) return img
+    await new Promise(resolve => setTimeout(resolve, 150))
+  }
+  return null
+}
+
+async function preparePicture(img) {
+  const width = img.naturalWidth, height = img.naturalHeight
+  const scale = Math.min(1, PICTURE_SIDE / Math.max(width, height))
+  const canvas = document.createElement('canvas')
+  canvas.width = Math.max(1, Math.round(width * scale))
+  canvas.height = Math.max(1, Math.round(height * scale))
+  const context = canvas.getContext('2d')
+  // A colour the canvas cannot read leaves the white.
+  context.fillStyle = '#fff'
+  context.fillStyle = lastLook?.tokens?.['--bg'] || '#fff'
+  context.fillRect(0, 0, canvas.width, canvas.height)
+  context.drawImage(img, 0, 0, canvas.width, canvas.height)
+  try {
+    // Safari draws no WebP and gives a PNG instead: JPEG then.
+    for (const [type, quality] of [['image/webp', 0.9], ['image/jpeg', 0.9], ['image/jpeg', 0.75], ['image/jpeg', 0.6]]) {
+      const blob = await new Promise(resolve => canvas.toBlob(resolve, type, quality))
+      if (blob?.type === type && blob.size <= PICTURE_BYTES) return { blob, width, height }
+    }
+  } catch {}
+  // A picture from a site that does not allow drawing it.
+  const url = img.currentSrc || img.src
+  return /^https:\/\//.test(url) ? { url, width, height } : null
+}
+
+// The activity as the phones get it: a <pinpoint> with its picture's link
+// and shape, once the server holds it; without, the phones wait for it.
+async function withPicture({ room, activity }) {
+  if (activity?.type !== 'pin' || !room) return activity
+  const img = await loadedPicture(room)
+  if (!img) return activity
+  const address = img.currentSrc || img.src
+  if (!pictures.has(address)) pictures.set(address, preparePicture(img).catch(() => null))
+  const picture = await pictures.get(address)
+  if (!picture) return activity
+  const ratio = picture.height / picture.width
+  if (picture.url) return { ...activity, image: { url: picture.url, ratio } }
+  if (!picture.version || picture.version !== heldPicture) {
+    const response = await fetch(`${controlSessionPath()}/image`, { method: 'POST', headers: withKey({ 'Content-Type': picture.blob.type }), body: picture.blob })
+    if (!response.ok) {
+      // A server from before <pinpoint> does not know the route.
+      if (response.status === 404) console.warn('mdeck: the room server cannot take pictures for <pinpoint>; update it to this version of mdeck')
+      return activity
+    }
+    picture.version = heldPicture = (await response.json()).version
+  }
+  return { ...activity, image: { url: `rooms/${encodeURIComponent(settings.code)}/image?v=${picture.version}`, ratio } }
+}
 
 // The presenter's screen announces the activity on the current slide and
 // repeats it every few seconds, so phones that join late and a server
@@ -347,10 +419,15 @@ async function sendCurrent() {
   const follow = followUrl(info)
   // The reactions the phones offer, whatever is on the slide.
   const reactions = settings.reactions ? { reactions: settings.reactions } : {}
-  const state = { ...current, look: lastLook, lang: deckLanguage(), labels: phoneWords(), ...reactions, ...(follow ? { follow } : {}) }
+  const announced = current
   try {
+    const activity = await withPicture(announced)
+    // The slide changed meanwhile: its own announcement goes out instead.
+    if (announced !== current) return
+    const state = { ...announced, activity, look: lastLook, lang: deckLanguage(), labels: phoneWords(), ...reactions, ...(follow ? { follow } : {}) }
     const response = await fetch(`${controlSessionPath()}/state`, { method: 'POST', headers: withKey({ 'Content-Type': 'application/json' }), body: JSON.stringify({ state }) })
     const body = response.ok ? await response.json().catch(() => ({})) : {}
+    if (response.ok && !body.ignored) heldPicture = body.image ?? null
     report(!response.ok ? { ok: false, reason: response.status === 403 ? 'wrong-code' : 'unreachable' } : body.ignored && !body.same ? { ok: false, reason: 'other-screen' } : { ok: true })
   } catch { report({ ok: false, reason: 'unreachable' }) }
 }

@@ -78,7 +78,7 @@ With `lang: de` in the settings, the slide and the phones show German words, suc
 
 ## Other kinds of questions
 
-Besides a poll, four more kinds work the same way: one line on a slide, answered on the phones.
+Besides a poll, five more kinds work the same way: one line on a slide, answered on the phones.
 
 ```markdown
 <scale room="pace" min="1" max="5" low="Too slow" high="Too fast" />
@@ -94,7 +94,21 @@ Besides a poll, four more kinds work the same way: one line on a slide, answered
 | `<wordcloud>` | A short text field | A cloud of every answer, packed around the middle, larger the more often it came in and some upright. Capitals and extra spaces do not matter. Each phone counts with one word: a new one replaces its earlier word. `height` sets its height (520). Colours come from the palette; `--cloud-1` to `--cloud-6` override them |
 | `<question>` | A text field | The newest answers as cards, eight unless `limit` says otherwise. People may send several |
 
-All of them take `room`, `question` and `qr` like a poll, and `placeholder` for the text fields. Their `question`, and the scale's `low` and `high`, may contain formatting and formulas like a poll's options. All of them have the lock that closes them; `<numeric>` also has the eye and the tick, and takes `results="hidden"`.
+### Tap on a picture
+
+`<pinpoint>` shows a picture on the phones; people tap the spot and send it. The slide shows every tap as a dot on the picture:
+
+```markdown
+# Where is the left atrium?
+
+<pinpoint room="heart" src="img/heart.png" answer="62% 31% 8%" />
+```
+
+`answer` is a circle: its middle across and down, and its radius, in percent of the picture (the radius as a share of its width). Pixels work too, as an image editor shows them: `answer="412 230 40"`. The tick draws the circle, colours the dots inside green, says how many hit, and tells each phone whether its tap did. Without `answer` the slide simply shows where people tapped. `height` sets the picture's height on the slide (520), and `results="hidden"` hides the dots until you show them, as for a poll.
+
+The phones get the picture from the server, made smaller: you need nothing else, but a server of your own must run this version of mdeck. `mdeck results` writes each tap as `62.1% 31.4%`, and the summary counts the taps on and off target.
+
+All of them take `room`, `question` and `qr` like a poll, and `placeholder` for the text fields. Their `question`, and the scale's `low` and `high`, may contain formatting and formulas like a poll's options. All of them have the lock that closes them; `<numeric>` and `<pinpoint>` also have the eye and the tick, and take `results="hidden"`.
 
 ## Let phones join
 

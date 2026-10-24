@@ -744,7 +744,7 @@ try {
   // Relay mode: the projector announces the poll on screen, the phone opens the
   // server's own answer page at /<code>, and its vote reaches the slide.
   const pollDeck = resolve(temp, 'poll.md')
-  writeFileSync(pollDeck, '---\ntheme: neue\nlang: de\nmeta:\n  title: Poll check\nsession:\n  code: 424242\n---\n\n---\n# Lunch?\n\n<poll room="lunch" options="Mensa|Thai" qr />\n\n---\n# Pace?\n\n<scale room="pace" min="1" max="5" qr="false" />\n\n---\n# Anything else?\n\n<question room="ask" qr="false" />\n\n---\n# One word?\n\n<wordcloud room="mood" qr="false" />\n\n---\n# Join\n\n<qrcode join />\n\n---\n# Primes\n\n<poll room="primes" question="Which are prime?" options="2|4|5" answer="2|5" multiple buttons="letters" qr="false" />\n\n---\n# Half\n\n<numeric room="half" question="Half of $x$, for $x > 0$ and $x = 1$?" answer="1/2" qr="false" />\n\n---\n# Derivative\n\n<poll room="deriv" question="$\\frac{d}{dx} x^2$?" qr="false">\n\n- [x] $2x$\n- [ ] `a|b`\n\n</poll>\n\nAfter the poll.\n')
+  writeFileSync(pollDeck, '---\ntheme: neue\nlang: de\nmeta:\n  title: Poll check\nsession:\n  code: 424242\n---\n\n---\n# Lunch?\n\n<poll room="lunch" options="Mensa|Thai" qr />\n\n---\n# Pace?\n\n<scale room="pace" min="1" max="5" qr="false" />\n\n---\n# Anything else?\n\n<question room="ask" qr="false" />\n\n---\n# One word?\n\n<wordcloud room="mood" qr="false" />\n\n---\n# Join\n\n<qrcode join />\n\n---\n# Primes\n\n<poll room="primes" question="Which are prime?" options="2|4|5" answer="2|5" multiple buttons="letters" qr="false" />\n\n---\n# Half\n\n<numeric room="half" question="Half of $x$, for $x > 0$ and $x = 1$?" answer="1/2" qr="false" />\n\n---\n# Derivative\n\n<poll room="deriv" question="$\\frac{d}{dx} x^2$?" qr="false">\n\n- [x] $2x$\n- [ ] `a|b`\n\n</poll>\n\nAfter the poll.\n\n---\n# Spot\n\n<pinpoint room="spot" src="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22800%22 height=%22400%22%3E%3Crect width=%22800%22 height=%22400%22 fill=%22%23e8f1f8%22/%3E%3C/svg%3E" answer="520 100 70" qr="false" />\n')
   const pollConfig = baseConfig(pollDeck)
   pollDev = await createServer({ ...pollConfig, plugins: [...pollConfig.plugins, livePlugin(), resultsPlugin(pollDeck)], server: { ...pollConfig.server, port: 0, host: '127.0.0.1' }, logLevel: 'silent' })
   await pollDev.listen()
@@ -811,17 +811,32 @@ try {
   await projector.evaluate("document.querySelector('[data-deck-active] .poll-solve').click()")
   await until(projector, "document.querySelector('[data-deck-active] .poll-row.is-correct .poll-label')?.textContent.includes('2x')")
   await until(phone, "document.querySelector('.answer-verdict')?.classList.contains('is-right')")
+  // A tap on a picture: the screen sends the phones the picture, smaller and
+  // never as SVG; the tap shows as a dot on the slide, and the circle (in
+  // pixels of an 800 × 400 picture) counts it and tells the phone.
+  await projector.evaluate("document.querySelector('deck-stage').goTo(8)")
+  await until(phone, "document.querySelector('.answer-picture img')?.naturalWidth > 0 && document.querySelector('.answer-send').disabled")
+  assert.deepEqual(await phone.evaluate("fetch(document.querySelector('.answer-picture img').src).then(r => [r.status, r.headers.get('content-type')])"), [200, 'image/webp'])
+  await phone.evaluate("(() => { const box = document.querySelector('.answer-picture img').getBoundingClientRect(); document.querySelector('.answer-picture').dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: box.left + 0.66 * box.width, clientY: box.top + 0.24 * box.height })) })()")
+  await until(phone, "!!document.querySelector('.answer-pin.is-draft') && !document.querySelector('.answer-send').disabled")
+  await phone.evaluate("document.querySelector('.answer-send').click()")
+  await until(projector, "document.querySelectorAll('[data-deck-active] .pinpoint-dot').length === 1")
+  await projector.evaluate("document.querySelector('[data-deck-active] .poll-solve').click()")
+  await until(projector, "document.querySelector('[data-deck-active] .numeric-answer')?.textContent.includes('1 von 1') && !!document.querySelector('[data-deck-active] .pinpoint-dot.is-in')")
+  await until(phone, "document.querySelector('.answer-verdict')?.classList.contains('is-right') && !!document.querySelector('.answer-pin-target')")
   // The answers are kept beside the deck, with the phones numbered and the
   // late vote left out, and a build shows them without a server.
   const resultsFile = resolve(temp, 'poll.results.json')
   const kept = () => { try { return JSON.parse(readFileSync(resultsFile, 'utf8')).rooms } catch { return {} } }
-  for (let i = 0; i < 100 && !kept().deriv; i++) await delay(50)
+  for (let i = 0; i < 100 && !kept().spot?.solution; i++) await delay(50)
   const rooms = kept()
   assert.deepEqual(rooms.lunch.answers.map(answer => [answer.phone, answer.value]), [[1, 'Thai']], 'the poll kept')
   assert.deepEqual(rooms.primes.answers.map(answer => answer.value), [['2'], ['2', '5']], 'several picks kept, the late vote left out')
   assert.equal(rooms.primes.closed, true)
   assert.deepEqual(rooms.half.answers.map(answer => answer.value), ['0,5'], 'the number kept')
   assert.deepEqual(rooms.deriv.answers.map(answer => answer.value), ['$2x$'], 'a list option kept as written')
+  assert.ok(rooms.spot.answers.length === 1 && Math.abs(rooms.spot.answers[0].value.x - 0.66) < 0.01 && Math.abs(rooms.spot.answers[0].value.y - 0.24) < 0.01, 'the tap kept')
+  assert.deepEqual(rooms.spot.solution, { x: 0.65, y: 0.25, r: 0.0875, ratio: 0.5 }, 'with the circle measured on the picture')
   execFileSync(process.execPath, ['bin/mdeck.js', 'build', pollDeck, '-o', resolve(temp, 'poll-built.html')], { cwd: root, stdio: 'pipe' })
   const record = await open('poll-built.html')
   await until(record, "document.querySelectorAll('[data-deck-active] .poll-count').length === 2")
@@ -1000,7 +1015,7 @@ try {
   assert.equal(await flow.evaluate(`${flowStage}.state.step`), 1, 'two presses show the whole drawing')
   await flow.close()
 
-  console.log('Browser checks passed: custom layout rendering, data from a CSV file as a chart that builds up and a table, slide times and a rehearsal, the phone clicker with the slide\'s controls and the join code over the slide, shared state of deck components, reveal/undo/reset synchronization, jumping to a slide by its number, a black screen, a frozen audience window and the overview of all slides, session isolation, launch page, poll relay, scale, open questions, word cloud and join code, several answers with keys, closing and the right answer on the phones, options as a list, numbers, results kept beside the deck and shown in a build, saved ink, drawing, drawing in the presenter view, touch (fingers swipe through slides), straight lines (snapping to 15° steps) and their end points, select and move, laser (kept while the pen is down, never joined to the next trail), zoom, saving ink in dev, following on another device, a second device through the stage room (also the join code and freezing the projector), video played on the iPad playing on the projector, a deck in three languages (the switch, the audience and a follower, right to left), and in one browser without a server (also with a standalone server for the polls), hotspots (keys on the presenter slide, flights the audience follows, leaving them), the keys that work now (?), and a drawing that builds up in numbered steps with parts to zoom to, with ids of its own on each slide.')
+  console.log('Browser checks passed: custom layout rendering, data from a CSV file as a chart that builds up and a table, slide times and a rehearsal, the phone clicker with the slide\'s controls and the join code over the slide, shared state of deck components, reveal/undo/reset synchronization, jumping to a slide by its number, a black screen, a frozen audience window and the overview of all slides, session isolation, launch page, poll relay, scale, open questions, word cloud and join code, several answers with keys, closing and the right answer on the phones, options as a list, numbers, a tap on a picture, results kept beside the deck and shown in a build, saved ink, drawing, drawing in the presenter view, touch (fingers swipe through slides), straight lines (snapping to 15° steps) and their end points, select and move, laser (kept while the pen is down, never joined to the next trail), zoom, saving ink in dev, following on another device, a second device through the stage room (also the join code and freezing the projector), video played on the iPad playing on the projector, a deck in three languages (the switch, the audience and a follower, right to left), and in one browser without a server (also with a standalone server for the polls), hotspots (keys on the presenter slide, flights the audience follows, leaving them), the keys that work now (?), and a drawing that builds up in numbered steps with parts to zoom to, with ids of its own on each slide.')
 } finally {
   await browser?.close()
   await tablet2?.close()

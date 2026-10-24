@@ -77,7 +77,7 @@ export function controlProxy({ upstream, key, session, authorize }) {
   return (request, response) => {
     const url = new URL(request.url, 'http://localhost')
     let room
-    try { room = decodeURIComponent(url.pathname.match(/^\/rooms\/([^/]+)(?:\/(?:events|presence|reset|state|ink))?$/)?.[1] ?? '') } catch {}
+    try { room = decodeURIComponent(url.pathname.match(/^\/rooms\/([^/]+)(?:\/(?:events|presence|reset|state|ink|image))?$/)?.[1] ?? '') } catch {}
     const code = session()
     const scoped = room === code || room?.startsWith(`${code}.`)
     const allowed = authorize(request)
@@ -85,7 +85,7 @@ export function controlProxy({ upstream, key, session, authorize }) {
       response.writeHead(403, { 'Content-Type': 'application/json' }); response.end(JSON.stringify({ error: 'This device cannot control that room' })); return
     }
     const target = new URL(`${upstream.replace(/\/+$/, '')}${url.pathname}${url.search}`)
-    const headers = { 'Content-Type': request.headers['content-type'] ?? 'application/json', ...(allowed ? { Authorization: `Bearer ${key}` } : {}) }
+    const headers = { 'Content-Type': request.headers['content-type'] ?? 'application/json', ...(request.headers['if-none-match'] ? { 'If-None-Match': request.headers['if-none-match'] } : {}), ...(allowed ? { Authorization: `Bearer ${key}` } : {}) }
     const forward = (target.protocol === 'https:' ? https : http).request(target, { method: request.method, headers }, result => {
       response.writeHead(result.statusCode, { ...result.headers, 'referrer-policy': 'no-referrer' })
       result.pipe(response)

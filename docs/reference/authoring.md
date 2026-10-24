@@ -734,6 +734,13 @@ labels:
 | `numeric.sent` | Sent: {value}. Send another to change. | Gesendet: {value}. Zum Ändern eine andere senden. |
 | `numeric.other` | Other | Andere |
 | `numeric.right` | {n} right | {n} richtig |
+| `pinpoint.inside` | {n} of {of} on target | {n} von {of} im Ziel |
+| `pinpoint.pick` | Tap the spot. | Auf die Stelle tippen. |
+| `pinpoint.confirm` | Move the pin if needed, then send. | Pin bei Bedarf verschieben, dann senden. |
+| `pinpoint.sent` | Sent. Tap elsewhere and send again to change. | Gesendet. Zum Ändern woanders tippen und erneut senden. |
+| `pinpoint.loading` | Loading the picture… | Bild wird geladen… |
+| `pinpoint.wrong` | Not quite: the circle shows the right spot. | Leider nicht: Der Kreis zeigt die richtige Stelle. |
+| `pinpoint.solution` | The circle shows the right spot. | Der Kreis zeigt die richtige Stelle. |
 
 ---
 
@@ -916,7 +923,7 @@ For `play="auto"` the video pauses and resets to the beginning when you navigate
 | `buttons` | — | `letters` puts A, B, C … before the options, and the phones show only those; `numbers` does the same with 1, 2, 3 …. For options better read on the slide, such as pictures (`options="![](a.svg)\|![](b.svg)"`) |
 | `results` | — | `hidden` starts with the results hidden, e.g. for peer instruction. A button with an eye shows or hides them (bars and counts) at any time, also in the audience window and on paired devices. Hidden, the audience window shows no bars; the presenter's own screens show them faint |
 
-Four more activities take the same `room`, `question` and `qr`:
+Five more activities take the same `room`, `question` and `qr`:
 
 | Tag | Attributes | Phones | Slide |
 |---|---|---|---|
@@ -924,6 +931,7 @@ Four more activities take the same `room`, `question` and `qr`:
 | `<numeric>` | `answer`, `tolerance` (0), `limit` (6), `placeholder`, `results` | A number field: `0.5`, `0,5`, `1/2`, `1e-3`; latest answer per device | The most frequent answers as bars, the rest as Other; with `answer`, the tick marks the right ones, counts them and tells each phone |
 | `<wordcloud>` | `placeholder`, `limit` (60), `height` (520) | Text field, up to 40 characters; a phone's latest word counts | A packed word cloud (d3-cloud): size by frequency, some words upright, case-insensitive |
 | `<question>` | `placeholder`, `limit` (8) | Text field, up to 200 characters, repeatable | The newest answers as cards |
+| `<pinpoint>` | `src`, `alt`, `answer`, `height` (520), `results` | The picture; a tap puts a pin, Send sends it as `{ x, y }` (0 to 1 across the picture); latest answer per device | The picture with a dot for each tap. `answer` is a circle, `x y r` in percent of the picture (`62% 31% 8%`, the radius of its width) or in its pixels (`412 230 40`): the tick draws it, colours the dots inside and outside, counts those inside and tells each phone |
 
 `<qrcode follow />` shows the link for following the slides on phones and laptops (`?view=follow`), with `mdeck run --network` or a hosted deck with a `server` setting; the phones' answer page links to it as well. `<qrcode join />` shows the deck's join code large with its link (`size`, default 420), for a slide that invites everyone once; activities after it can use `qr="false"`. QR codes (`<qrcode>`, activities) are SVG in the slide's `--ink` on a transparent background; `--qr-ink` and `--qr-bg` override the colours.
 
@@ -945,9 +953,11 @@ Each item is an option as written, with no `|` to split and nothing to escape; a
 
 The slide shows live bars, the number of answers, a QR code and a short link. Phones never load the deck: they open the server's own answer page at `<server>/<code>`, where the six-digit session code is the same for every poll in the deck. The presenter's screen (the presenter view or a full deck window, never an embedded preview) announces the poll on the current slide with what the phones should show and the deck's look; the server only accepts that from the presenter. Between polls the phones wait. Each device's latest vote counts. The presenter can reset the room (hover over the results).
 
-Every activity has a lock button that closes it: answers after that do not count, and the phones say it is closed until it opens again. Polls and `<numeric>` also have the eye that hides or shows the results. Below the results, polls, scales and `<numeric>` count “12 of 31 answered” while phones are connected (people following the slides count as phones). The lock, the eye and the tick reach every screen of the talk, also after a reload: they are kept in the activity room's state on the server, which only the presenter may set, and phones read it there. Reset clears the answers and opens the activity again.
+Phones never load the deck, so a `<pinpoint>`'s picture reaches them through the room server: the presenter's screen draws it at most 1600 pixels wide or high, as WebP or JPEG (an SVG too, so no SVG reaches the phones), and sends it to the server, which holds one picture per session, the one on screen. A picture from another site that may not be drawn is linked as it is, if it is on https. A server older than this feature cannot take the picture: update `mdeck server` too. Pixels in `answer` are those of the picture as stored (an SVG's `width` and `height`).
 
-While `mdeck run` runs, the answers are kept beside the deck in `<slides>.results.json`: per activity room, each answer with its time, the phones numbered per room (their ids are not kept), and, once an activity was closed, only the answers that counted. Reset takes a room out of the file; a new, empty server leaves the file alone. Builds, `mdeck send` and `mdeck pdf` show the kept answers where no room server answers (`--no-results` leaves them out), and `mdeck results [slides.md] [-o file.csv]` prints them as CSV: `slide,room,kind,question,phone,at,answer`, several picks joined by `|` (`kind` is poll, scale, number, words or question; a room the deck no longer asks has no slide). `--summary` prints `slide,room,kind,question,answer,count,share`: one row per option, scale step, number or word, counted as the slide counts them (each phone's latest answer for polls, scales and numbers; every answer for words and questions), and `average` and `median` rows for scales and numbers. `--json` (or `-o file.json`) writes `{ version, title, exportedAt, questions: [{ room, slide, kind, question, closed, savedAt, summary, answers }] }`. The launch page offers the same three files.
+Every activity has a lock button that closes it: answers after that do not count, and the phones say it is closed until it opens again. Polls, `<numeric>` and `<pinpoint>` also have the eye that hides or shows the results. Below the results, polls, scales, `<numeric>` and `<pinpoint>` count “12 of 31 answered” while phones are connected (people following the slides count as phones). The lock, the eye and the tick reach every screen of the talk, also after a reload: they are kept in the activity room's state on the server, which only the presenter may set, and phones read it there. Reset clears the answers and opens the activity again.
+
+While `mdeck run` runs, the answers are kept beside the deck in `<slides>.results.json`: per activity room, each answer with its time, the phones numbered per room (their ids are not kept), and, once an activity was closed, only the answers that counted. Reset takes a room out of the file; a new, empty server leaves the file alone. Builds, `mdeck send` and `mdeck pdf` show the kept answers where no room server answers (`--no-results` leaves them out), and `mdeck results [slides.md] [-o file.csv]` prints them as CSV: `slide,room,kind,question,phone,at,answer`, several picks joined by `|` (`kind` is poll, scale, number, words, question or spot; a room the deck no longer asks has no slide; a tap on a picture reads `62.1% 31.4%`). `--summary` prints `slide,room,kind,question,answer,count,share`: one row per option, scale step, number or word, counted as the slide counts them (each phone's latest answer for polls, scales and numbers; every answer for words and questions), and `average` and `median` rows for scales and numbers; for a `<pinpoint>` with `answer`, `on target` and `off target`. `--json` (or `-o file.json`) writes `{ version, title, exportedAt, questions: [{ room, slide, kind, question, closed, savedAt, summary, answers }] }`. The results file also keeps each activity's right answer as the slide knew it (`solution`); for a `<pinpoint>` that is its circle measured on the picture, which the summary counts with. The launch page offers the same three files.
 
 `--no-polls` leaves slides with an activity or a join code (`<qrcode join />`) out of `mdeck send`, `mdeck build --reader` and `mdeck pdf`; without it they show as a record of the talk. Saved drawings follow the remaining slides.
 

@@ -68,13 +68,15 @@ export function useControls(room, live, { results = true, solution = null } = {}
   // They are kept beside the deck while `mdeck run` runs. Answers of none
   // are kept only after Reset: a room that starts empty, from a server that
   // restarted while this slide was shown, leaves what was kept alone.
+  // The right answer goes with them (a <pinpoint>'s circle, measured on its picture).
   const resets = useRef(live.resets)
   const counting = counted(live.messages)
+  const solutionKey = solution == null ? '' : JSON.stringify(solution)
   useEffect(() => {
     if (!live.canReset || !live.connected || live.offline || (!counting.length && live.resets === resets.current)) return
     resets.current = live.resets
-    keepAnswers(room, counting, { closed: controls.closed })
-  }, [room, counting.length, counting.at(-1)?.n, controls.closed, live.canReset, live.connected, live.resets])
+    keepAnswers(room, counting, { closed: controls.closed, solution })
+  }, [room, counting.length, counting.at(-1)?.n, controls.closed, live.canReset, live.connected, live.resets, solutionKey])
   const close = messages => change(controls.closed ? { closed: false } : { closed: true, upTo: Math.max(0, ...messages.map(message => message.n)) })
   // Reset starts over: open, the answer and results as at the start.
   const reset = () => { change({ closed: false, upTo: 0, revealed: false, results }); return live.reset() }

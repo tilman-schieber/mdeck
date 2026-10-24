@@ -2,7 +2,7 @@
 // each activity's answers as they come in (src/live/client.js), and they go
 // into <deck>.results.json beside the deck (src/core/results.js).
 //
-//   POST /__mdeck/results   { room, closed, answers } → { ok }
+//   POST /__mdeck/results   { room, closed, answers, solution? } → { ok }
 //
 // Answers of none take the room out of the file, as Reset does. Writes wait
 // a moment, so a burst of votes is one write, and do not reload the open
@@ -71,8 +71,8 @@ export function resultsMiddleware(file, { authorize = isAllowedRequest } = {}) {
     if (request.method !== 'POST') { response.setHeader('Allow', 'POST'); return send(response, 405, { error: 'Method not allowed' }) }
     if (!authorize(request)) return send(response, 403, { error: 'Only the presenter keeps the results' })
     try {
-      const { room, closed, answers } = await readJson(request)
-      file.save(String(room ?? ''), { closed, answers })
+      const { room, closed, answers, solution } = await readJson(request)
+      file.save(String(room ?? ''), { closed, answers, solution })
       return send(response, 200, { ok: true })
     } catch (error) {
       return send(response, error.status ?? 500, { error: error.message })

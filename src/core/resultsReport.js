@@ -6,12 +6,14 @@
 //
 // The summary counts as the slide does: for a poll, a scale, a number and a
 // word cloud, each phone's latest answer; for open questions, every answer. Phones stay numbered per question; no device ids are kept.
+// A tap on a picture (<pinpoint>) is written as "62.1% 31.4%".
 import { tagsIn } from './tags.js'
 import { expandPollLists, pollChoices } from './pollList.js'
 import { choicesOf } from '../components/inlineText.js'
 import { parseNumber, groupNumbers } from '../components/numbers.js'
+import { tapOf, tapText, circleOf, isInside } from '../components/pinpoint.js'
 
-const KINDS = { poll: 'poll', scale: 'scale', numeric: 'number', wordcloud: 'words', question: 'question' }
+const KINDS = { poll: 'poll', scale: 'scale', numeric: 'number', wordcloud: 'words', question: 'question', pinpoint: 'spot' }
 
 const plain = text => String(text ?? '').replace(/\$([^$]+)\$/g, '$1').replace(/[*_`]/g, '').replace(/\s+/g, ' ').trim()
 
@@ -70,8 +72,12 @@ function stats(values) {
   return { average: round(values.reduce((sum, value) => sum + value, 0) / values.length), median: round(median), lowest: sorted[0], highest: sorted.at(-1) }
 }
 
-/** How one activity came out: { phones, answers, counts: [{ answer, count }], average?, median?, lowest?, highest? }. */
-export function summarize(activity, answers = []) {
+/**
+ * How one activity came out: { phones, answers, counts: [{ answer, count }], average?, median?, lowest?, highest? }.
+ * `solution` is the right answer the slide kept: a <pinpoint>'s circle,
+ * which says how many taps were on target.
+ */
+export function summarize(activity, answers = [], solution = null) {
   const phones = new Set(answers.map(answer => answer.phone)).size
   const base = { phones, answers: answers.length }
   const tag = activity?.tag
@@ -87,6 +93,12 @@ export function summarize(activity, answers = []) {
     const steps = Array.from({ length: activity.max - activity.min + 1 }, (_, i) => activity.min + i)
     const values = latestPerPhone(answers).map(answer => Number(answer.value)).filter(value => steps.includes(value))
     return { ...base, voted: values.length, counts: steps.map(step => ({ answer: String(step), count: values.filter(value => value === step).length })), ...stats(values) }
+  }
+  if (tag === 'pinpoint') {
+    const taps = latestPerPhone(answers).map(answer => tapOf(answer.value)).filter(Boolean)
+    const circle = circleOf(solution)
+    const inside = circle ? taps.filter(tap => isInside(tap, circle)).length : 0
+    return { ...base, voted: taps.length, counts: circle ? [{ answer: 'on target', count: inside }, { answer: 'off target', count: taps.length - inside }] : [] }
   }
   if (tag === 'numeric') {
     const texts = latestPerPhone(answers).map(answer => answer.value).filter(value => parseNumber(value) != null)
@@ -118,12 +130,12 @@ export function resultsReport(results, deck) {
   return [...asked, ...gone].map(activity => {
     const entry = rooms[activity.room]
     const { tag, options, multiple, min, max, ...shown } = activity
-    return { ...shown, closed: entry.closed, savedAt: entry.savedAt, summary: summarize(activity, entry.answers), answers: entry.answers }
+    return { ...shown, closed: entry.closed, savedAt: entry.savedAt, summary: summarize(activity, entry.answers, entry.solution), answers: entry.answers }
   })
 }
 
 const csvCell = value => {
-  const text = value == null ? '' : Array.isArray(value) ? value.join('|') : String(value)
+  const text = value == null ? '' : Array.isArray(value) ? value.join('|') : tapOf(value) ? tapText(tapOf(value)) : String(value)
   return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text
 }
 const csv = rows => rows.map(row => row.map(csvCell).join(',')).join('\n') + '\n'

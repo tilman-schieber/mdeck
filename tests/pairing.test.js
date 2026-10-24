@@ -119,6 +119,10 @@ test('network pairing proxies only this session and revokes control without disc
   assert.equal((await state('123456.stage')).status, 200)
   assert.equal((await state('654321.stage')).status, 403)
   assert.equal((await fetch(`${live.url}/rooms/123456.stage/state`, { method: 'POST', headers, body: '{}' })).status, 403, 'token alone cannot unlock another server')
+  // A <pinpoint> picture goes through as it is, with the master key added.
+  const picture = await fetch(`${base}/rooms/123456/image`, { method: 'POST', headers: { 'Content-Type': 'image/png', Authorization: `Bearer ${token}` }, body: Buffer.from('png') })
+  assert.equal(picture.status, 200)
+  assert.equal((await fetch(`${base}/rooms/123456/image?v=${(await picture.json()).version}`)).headers.get('content-type'), 'image/png')
   pairing.revoke()
   assert.equal((await info()).canReset, false)
   assert.equal((await state('123456.stage')).status, 403)
