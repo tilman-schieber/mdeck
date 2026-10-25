@@ -106,7 +106,7 @@ Besides a poll, five more kinds work the same way: one line on a slide, answered
 
 `answer` is a circle: its middle across and down, and its radius, in percent of the picture (the radius as a share of its width). Pixels work too, as an image editor shows them: `answer="412 230 40"`. The tick draws the circle, colours the dots inside green, says how many hit, and tells each phone whether its tap did. Without `answer` the slide simply shows where people tapped. `height` sets the picture's height on the slide (520), and `results="hidden"` hides the dots until you show them, as for a poll.
 
-The phones get the picture from the server, made smaller: you need nothing else, but a server of your own must run this version of mdeck. `mdeck results` writes each tap as `62.1% 31.4%`, and the summary counts the taps on and off target.
+The phones get the picture from the server, made smaller (at most 1000 px), and the server keeps it only while the question is on screen: you need nothing else, but a server of your own must run this version of mdeck. `mdeck results` writes each tap as `62.1% 31.4%`, and the summary counts the taps on and off target.
 
 All of them take `room`, `question` and `qr` like a poll, and `placeholder` for the text fields. Their `question`, and the scale's `low` and `high`, may contain formatting and formulas like a poll's options. All of them have the lock that closes them; `<numeric>` and `<pinpoint>` also have the eye and the tick, and take `results="hidden"`.
 

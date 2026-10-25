@@ -312,9 +312,9 @@ const phoneWords = () => ({
 // Phones never load the deck, so the presenter's screen sends them the
 // picture of the activity on screen through the room server: drawn smaller,
 // as WebP or JPEG (never SVG), on the deck's background where it is
-// transparent. The server holds one picture per session, the latest. A
+// transparent. The server holds one picture per session, while it is on screen. A
 // picture from another site that may not be drawn is linked as it is, on https.
-const PICTURE_SIDE = 1600, PICTURE_BYTES = 500 * 1024
+const PICTURE_SIDE = 1000, PICTURE_BYTES = 190 * 1024
 // Each picture once, by its address: { blob, width, height, version } or { url, width, height }.
 const pictures = new Map()
 // The version the server holds, as it last said.

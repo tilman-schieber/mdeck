@@ -4,7 +4,7 @@
 // A room also has one state value that only the presenter sets: the deck's
 // session room holds the activity on screen, which the answer page shows.
 // It may also hold one picture, the one the activity on screen shows
-// (<pinpoint>), which the next replaces.
+// (<pinpoint>), which the next replaces; it goes when no <pinpoint> is on screen.
 // Everything lives in memory: nothing is written to disk, and idle rooms are
 // forgotten. The same handler runs inside `mdeck run` and as `mdeck server`.
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
@@ -131,6 +131,8 @@ export function createRooms({ maxMessages = 5000, maxInk = 5000, maxRooms = 500,
       if (next && room.state && stamp < room.stamp && (id.endsWith('.stage') || now() - room.heard < quietMs)) return false
       room.stamp = next ? stamp : 0
       room.heard = now()
+      // The picture is kept only while a <pinpoint> is on screen.
+      if (room.image && next?.activity?.type !== 'pin') room.image = null
       // The presenter repeats its state; listeners only hear changes.
       if (JSON.stringify(next) === JSON.stringify(room.state)) return true
       room.state = next
@@ -212,7 +214,7 @@ const MAX_BODY = 4096
 const MAX_STATE = 32768
 const MAX_INK = 65536
 // A picture the presenter's screen made smaller for the phones (src/live/client.js).
-const MAX_IMAGE = 512 * 1024
+const MAX_IMAGE = 200 * 1024
 // Pictures only, never SVG: a page could run its scripts from here.
 const IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp'])
 

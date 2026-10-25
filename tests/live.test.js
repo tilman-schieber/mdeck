@@ -344,7 +344,7 @@ test('only the presenter sends a picture; phones get it by its version, and the 
   assert.equal((await send(png, 'image/png', {})).status, 403)
   assert.equal((await send('<svg onload="alert(1)"/>', 'image/svg+xml')).status, 415, 'never SVG')
   assert.equal((await send(Buffer.alloc(0))).status, 400)
-  assert.equal((await send(Buffer.alloc(600 * 1024))).status, 413)
+  assert.equal((await send(Buffer.alloc(220 * 1024))).status, 413)
   assert.equal((await fetch(`${live.url}/rooms/${room}/image`)).status, 404)
   const sent = await send(png)
   assert.equal(sent.status, 200)
@@ -362,4 +362,8 @@ test('only the presenter sends a picture; phones get it by its version, and the 
   assert.notEqual(next.version, version)
   assert.equal((await fetch(`${live.url}/rooms/${room}/image?v=${version}`)).status, 404)
   assert.equal((await fetch(`${live.url}/rooms/${room}/image?v=${next.version}`)).status, 200)
+  // A slide without a <pinpoint> lets the picture go.
+  const away = await fetch(`${live.url}/rooms/${room}/state`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer secret' }, body: JSON.stringify({ state: { room: 'votes', activity: { type: 'poll' } } }) })
+  assert.equal((await away.json()).image, undefined)
+  assert.equal((await fetch(`${live.url}/rooms/${room}/image?v=${next.version}`)).status, 404)
 })
