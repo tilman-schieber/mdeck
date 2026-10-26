@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Fixed: with `mdeck run --server`, an iPad stayed black when the deck used a theme installed in `~/.mdeck/extensions`; the laptop did not share files in a dot directory, not even the theme's stylesheet. Other dot paths (`.env`, `.git`) stay private.
+- Fixed: with `mdeck run --server`, the picture of a `<pinpoint>` could not reach the phones from a paired iPad.
+
 ## 3.16.1 — 2026-10-27
 
 - Fixed: an iPad that opened the presenter view without pairing showed "connected" but steered nothing, without a word; it says "Not paired" now, and a device whose token has gone says "No longer paired" as before.

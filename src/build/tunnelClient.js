@@ -54,15 +54,19 @@ export function shareable(address, method, { base, resources = new Set(), sessio
   const parts = rest.split('/')
   if (rest.includes('\0') || rest.includes('\\') || parts.includes('..')) return false
   if (rest === '' || rest === 'index.html') return READ.has(method)
-  if (parts.some(part => part.startsWith('.') && part !== '.vite')) return false
+  // A module of the deck's import graph may lie in a dot directory, such as a
+  // theme installed in ~/.mdeck/extensions; any other dot path stays private.
+  let approved = false
+  try { approved = resources.has(resourceKey(url.href)) } catch {}
+  if (!approved && parts.some(part => part.startsWith('.') && part !== '.vite')) return false
   if (rest === '__mdeck/ink') return method === 'GET'
   if (rest === '__mdeck/ink/ops' || rest === '__mdeck/pair/claim') return method === 'POST'
   if (rest === '__mdeck/live/info' || rest === '__mdeck/pair/status') return READ.has(method)
-  const room = rest.match(/^__mdeck\/live\/rooms\/([^/]+)(\/events|\/state|\/reset|\/ink)?$/)
-  if (room && session && (room[1] === session || room[1].startsWith(`${session}.`))) return room[2] === '/events' ? method === 'GET' : method === 'POST'
+  const room = rest.match(/^__mdeck\/live\/rooms\/([^/]+)(\/events|\/state|\/reset|\/ink|\/image)?$/)
+  if (room && session && (room[1] === session || room[1].startsWith(`${session}.`))) return room[2] === '/events' ? method === 'GET' : room[2] === '/image' ? method === 'POST' || READ.has(method) : method === 'POST'
   if (rest.startsWith('__mdeck/')) return false
   if (!READ.has(method)) return false
-  try { return resources.has(resourceKey(url.href)) } catch { return false }
+  return approved
 }
 
 /**

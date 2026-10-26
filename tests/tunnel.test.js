@@ -9,7 +9,18 @@ import { isAllowedRequest } from '../src/build/editorPlugin.js'
 
 const KEY = 'room-server-key'
 const base = id => `/t/${id}/`
-const rules = id => ({ base: base(id), resources: new Set(['main.jsx', '@vite/client', '@id/__x00__virtual:slides', 'node_modules/.vite/deps/preact.js', '@fs/opt/mdeck/src/runtime/deck-stage.js', '@fs/home/me/talk/img/photo.png', 'img/photo.png'].map(path => base(id) + path)) })
+const rules = id => ({ base: base(id), resources: new Set(['main.jsx', '@vite/client', '@id/__x00__virtual:slides', 'node_modules/.vite/deps/preact.js', '@fs/opt/mdeck/src/runtime/deck-stage.js', '@fs/home/me/talk/img/photo.png', 'img/photo.png', '@fs/home/me/.mdeck/extensions/themes/fhnw/styles.css'].map(path => base(id) + path)) })
+
+test('the session\'s rooms are shareable, with the picture of a pinpoint', () => {
+  const id = newTunnelId()
+  const ok = (path, method = 'GET') => shareable(`${base(id)}__mdeck/live/rooms/${path}`, method, { ...rules(id), session: '123456' })
+  assert.ok(ok('123456.p1/events'))
+  assert.ok(ok('123456.p1/state', 'POST'))
+  assert.ok(ok('123456.p1/image', 'POST'))
+  assert.ok(ok('123456.p1/image'))
+  assert.ok(!ok('123456.p1/image', 'DELETE'))
+  assert.ok(!ok('654321.p1/image', 'POST'))
+})
 
 test('only what the presenter and audience pages need is shareable', () => {
   const id = newTunnelId()
@@ -24,6 +35,7 @@ test('only what the presenter and audience pages need is shareable', () => {
   assert.ok(ok(at('@fs/opt/mdeck/src/runtime/deck-stage.js')))
   assert.ok(ok(at('@fs/home/me/talk/img/photo.png')))
   assert.ok(ok(at('img/photo.png')))
+  assert.ok(ok(at('@fs/home/me/.mdeck/extensions/themes/fhnw/styles.css')), 'a theme installed in a dot directory')
   assert.ok(ok(at('__mdeck/ink')))
   assert.ok(ok(at('__mdeck/ink/ops'), 'POST'))
   assert.ok(ok(at('__mdeck/pair/claim'), 'POST'))
@@ -40,6 +52,8 @@ test('only what the presenter and audience pages need is shareable', () => {
   assert.ok(!ok(at('slides.drawings.json')))
   assert.ok(!ok(at('.env')))
   assert.ok(!ok(at('notes/.git/config')))
+  assert.ok(!ok(at('@fs/home/me/.mdeck/extensions/themes/fhnw/manifest.json')))
+  assert.ok(!ok(at('@fs/home/me/.mdeck/extensions/themes/fhnw/print.css')), 'only approved files')
   assert.ok(!ok(at('@fs/etc/passwd')))
   assert.ok(!ok(at('@fs/home/me/talk/secret.txt')))
   assert.ok(!ok(at('@fs/home/me/talk-other/x.js')))
