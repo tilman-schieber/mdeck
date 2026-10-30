@@ -5,8 +5,8 @@
 //   { version: 1, width, height, slides: { <slideId>: [stroke, …] } }
 //   stroke = { id: '<device>:<n>', tool: 'pen' | 'highlighter', color, size,
 //              points: [[x, y, pressure], …] }
-// Points are in the deck's design pixels (width × height). Ink belongs to a
-// slide, not to one of its steps.
+// Points are in the deck's design pixels (width × height), to a tenth of a
+// pixel. Ink belongs to a slide, not to one of its steps.
 import { getStroke } from 'perfect-freehand'
 
 export const INK_VERSION = 1
@@ -32,7 +32,7 @@ function cleanStroke(stroke, scaleX = 1, scaleY = 1) {
   if (!stroke || typeof stroke !== 'object' || !Array.isArray(stroke.points)) return null
   const points = stroke.points
     .filter(point => Array.isArray(point) && Number.isFinite(point[0]) && Number.isFinite(point[1]))
-    .map(([x, y, pressure = 0.5]) => [round(x * scaleX), round(y * scaleY), round(Math.min(1, Math.max(0, Number(pressure) || 0.5)), 2)])
+    .map(([x, y, pressure = 0.5]) => [round(x * scaleX, 1), round(y * scaleY, 1), round(Math.min(1, Math.max(0, Number(pressure) || 0.5)), 2)])
   if (!points.length) return null
   return {
     id: String(stroke.id ?? ''),
@@ -114,23 +114,11 @@ export function applyOp(ink, op) {
   return next
 }
 
-// Ramer–Douglas–Peucker on x/y, keeping each kept point's pressure.
 function distanceToSegment([px, py], [ax, ay], [bx, by]) {
   const dx = bx - ax, dy = by - ay
   const length = dx * dx + dy * dy
   const t = length ? Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / length)) : 0
   return Math.hypot(px - (ax + t * dx), py - (ay + t * dy))
-}
-/** Fewer points for a finished stroke, within `tolerance` design pixels. */
-export function simplify(points, tolerance = 0.5) {
-  if (points.length < 3) return points.slice()
-  let farthest = 0, index = 0
-  for (let i = 1; i < points.length - 1; i++) {
-    const d = distanceToSegment(points[i], points[0], points[points.length - 1])
-    if (d > farthest) { farthest = d; index = i }
-  }
-  if (farthest <= tolerance) return [points[0], points[points.length - 1]]
-  return [...simplify(points.slice(0, index + 1), tolerance).slice(0, -1), ...simplify(points.slice(index), tolerance)]
 }
 
 /** True when `point` lies within `radius` design pixels of the stroke. */

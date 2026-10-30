@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { resolve } from 'node:path'
-import { inkFileFor, emptyInk, normalizeInk, validateInk, orphanIds, applyOp, isSlideId, simplify, hitTest, strokePath, inkOrder, translateStroke, insidePolygon, strokesInLasso, strokesBox, inkPaint, snapAngle } from '../src/core/ink.js'
+import { inkFileFor, emptyInk, normalizeInk, validateInk, orphanIds, applyOp, isSlideId, hitTest, strokePath, inkOrder, translateStroke, insidePolygon, strokesInLasso, strokesBox, inkPaint, snapAngle } from '../src/core/ink.js'
 import { paletteTokens } from '../src/extensions/appearance.js'
 import { slidesPlugin } from '../src/build/slidesPlugin.js'
 import { checkDeck } from '../src/build/check.js'
@@ -25,9 +25,9 @@ test('normalizing drops broken strokes, rounds points and scales to the theme si
   } }
   const ink = normalizeInk(raw)
   assert.deepEqual(Object.keys(ink.slides), ['intro'])
-  assert.deepEqual(ink.slides.intro[0].points, [[10, 21, 0.44], [30, 40, 0.5]])
+  assert.deepEqual(ink.slides.intro[0].points, [[10.3, 20.7, 0.44], [30, 40, 0.5]])
   const half = normalizeInk(raw, { width: 960, height: 540 })
-  assert.deepEqual(half.slides.intro[0].points[0], [5, 10, 0.44])
+  assert.deepEqual(half.slides.intro[0].points[0], [5.1, 10.4, 0.44])
   assert.equal(half.slides.intro[0].size, 3)
   assert.deepEqual(normalizeInk(null), emptyInk())
   assert.equal(normalizeInk({ slides: { s: [stroke('x', [[1, 1]], { tool: 'laser', color: 'url(evil)' })] } }).slides.s[0].tool, 'pen', 'unknown tools and colours fall back')
@@ -57,11 +57,7 @@ test('changes apply once, whatever order the devices send them in', () => {
   assert.equal(applyOp(renamed, { type: 'nonsense' }), renamed)
 })
 
-test('finished strokes are simplified, and the eraser finds them', () => {
-  const line = Array.from({ length: 50 }, (_, i) => [i * 2, 100, 0.5])
-  assert.equal(simplify(line).length, 2, 'a straight line needs two points')
-  const corner = [[0, 0, 0.5], [50, 0, 0.5], [100, 0, 0.5], [100, 50, 0.5], [100, 100, 0.5]]
-  assert.deepEqual(simplify(corner).map(p => p.slice(0, 2)), [[0, 0], [100, 0], [100, 100]])
+test('the eraser finds finished strokes', () => {
   const s = stroke('a', [[0, 0, 0.5], [100, 0, 0.5]])
   assert.equal(hitTest(s, [50, 5]), true)
   assert.equal(hitTest(s, [50, 60]), false)

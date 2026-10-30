@@ -4,7 +4,7 @@
 // `save(op)` when a server keeps the ink file; otherwise it is kept in this
 // browser (localStorage) and the file can be downloaded.
 import { currentInk, changeInk, slideStrokes, resolveSlideId } from './store.js'
-import { simplify, hitTest, serializeInk } from '../../core/ink.js'
+import { hitTest, serializeInk } from '../../core/ink.js'
 import { inkFileName } from 'virtual:deck-ink'
 
 function deviceId() {
@@ -78,8 +78,11 @@ export function createInkController({ storageKey, save = null, publish = () => {
       notify()
     },
 
+    // The stroke keeps every point the pen gave: perfect-freehand draws
+    // fewer points differently, and the saved stroke would move away from
+    // the one just drawn when the pen lifts.
     addStroke({ slideId, tool, color, size, points }) {
-      const stroke = { id: `${device}:${Date.now().toString(36)}${(counter++).toString(36)}`, tool, color, size, points: simplify(points, 0.5) }
+      const stroke = { id: `${device}:${Date.now().toString(36)}${(counter++).toString(36)}`, tool, color, size, points }
       commit([{ type: 'add', slideId, stroke }], [{ type: 'remove', slideId, ids: [stroke.id] }])
     },
 
