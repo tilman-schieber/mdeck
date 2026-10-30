@@ -1,6 +1,6 @@
 {
   "name": "mdeck",
-  "version": "3.17.0",
+  "version": "3.17.1",
   "type": "module",
   "description": "Write slides as a plain text file, present them in the browser, share them as one HTML file or PDF.",
   "license": "MIT",
