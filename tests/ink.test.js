@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { resolve } from 'node:path'
-import { inkFileFor, emptyInk, normalizeInk, validateInk, orphanIds, applyOp, isSlideId, hitTest, strokePath, inkOrder, translateStroke, insidePolygon, strokesInLasso, strokesBox, inkPaint, snapAngle } from '../src/core/ink.js'
+import { inkFileFor, emptyInk, normalizeInk, validateInk, orphanIds, applyOp, isSlideId, hitTest, strokePath, inkOrder, translateStroke, insidePolygon, strokesInLasso, strokesBox, inkPaint, snapAngle, spacedPoints, INK_SPACING } from '../src/core/ink.js'
 import { paletteTokens } from '../src/extensions/appearance.js'
 import { slidesPlugin } from '../src/build/slidesPlugin.js'
 import { checkDeck } from '../src/build/check.js'
@@ -55,6 +55,17 @@ test('changes apply once, whatever order the devices send them in', () => {
   const renamed = applyOp(applyOp(emptyInk(), { type: 'add', slideId: 'slide-3', stroke: stroke('a:1') }), { type: 'rename', from: 'slide-3', to: 'lunch' })
   assert.deepEqual(Object.keys(renamed.slides), ['lunch'])
   assert.equal(applyOp(renamed, { type: 'nonsense' }), renamed)
+})
+
+test('a stroke keeps only points a little apart, measured from the last one kept', () => {
+  assert.equal(INK_SPACING, 0.3)
+  // A slow mouse at 1000 Hz: positions a tenth of a pixel apart.
+  const slow = Array.from({ length: 10 }, (_, i) => [10 + i / 10, 20, 0.5])
+  assert.deepEqual(spacedPoints([10, 20, 0.5], slow).map(([x]) => x), [10.3, 10.6, 10.9], 'every third one')
+  assert.deepEqual(spacedPoints([0, 0, 0.5], [[0, 0, 0.6], [0.1, 0.1, 0.7]]), [], 'none, while the pen stays put')
+  assert.deepEqual(spacedPoints(undefined, [[5, 5, 0.5], [5.1, 5, 0.5], [9, 5, 0.5]]), [[5, 5, 0.5], [9, 5, 0.5]], 'the first point of a stroke counts')
+  const fast = [[0, 0, 0.5], [2, 0, 0.5], [4, 1, 0.5]]
+  assert.deepEqual(spacedPoints([-2, 0, 0.5], fast), fast, 'normal drawing keeps everything')
 })
 
 test('the eraser finds finished strokes', () => {

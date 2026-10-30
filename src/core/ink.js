@@ -121,6 +121,25 @@ function distanceToSegment([px, py], [ax, ay], [bx, by]) {
   return Math.hypot(px - (ax + t * dx), py - (ay + t * dy))
 }
 
+// A pen or a mouse that moves slowly reports many points at almost the same
+// spot: a mouse at 1000 Hz, or the Apple Pencil (240 Hz) drawing slowly. The
+// stage keeps a point only this many design pixels away from the one before,
+// while the stroke is drawn, so the stroke on screen and the saved one have
+// the same points. Fewer points keep a long stroke within the limits for
+// saving (inkPlugin.js) and for the stage room (live/rooms.js).
+export const INK_SPACING = 0.3
+
+/** The points of `added` that lie at least `min` design pixels from the one kept before them, starting after `last`. */
+export function spacedPoints(last, added, min = INK_SPACING) {
+  const kept = []
+  for (const point of added) {
+    const before = kept[kept.length - 1] ?? last
+    // Points lie on a tenth of a pixel: 10.6 - 10.3 is a hair under 0.3.
+    if (!before || Math.hypot(point[0] - before[0], point[1] - before[1]) >= min - 1e-9) kept.push(point)
+  }
+  return kept
+}
+
 /** True when `point` lies within `radius` design pixels of the stroke. */
 export function hitTest(stroke, point, radius = 12) {
   const reach = radius + (stroke.size ?? 6) / 2

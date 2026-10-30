@@ -1,4 +1,4 @@
-import { inkPaint, snapAngle } from '../../core/ink.js';
+import { inkPaint, snapAngle, spacedPoints, INK_SPACING } from '../../core/ink.js';
 
 const CLICK_AFTER_INK_MS = 400;
 // Holding the pen still this long turns the stroke into a straight line.
@@ -141,9 +141,14 @@ export const Ink = (Base) => class extends Base {
     const added = (events.length ? events : [e]).map(ev => this._inkPoint(ev));
     const tool = drawing.tool.tool;
     if (drawing.straight) { this._drawStraight(drawing, added[added.length - 1]); return; }
-    drawing.points.push(...added);
+    const pen = tool === 'pen' || tool === 'highlighter';
+    // A pen or highlighter keeps only points a little apart (INK_SPACING in
+    // core/ink.js); the stroke drawn now is the one that is saved.
+    const kept = pen ? spacedPoints(drawing.points[drawing.points.length - 1], added) : added;
+    drawing.points.push(...kept);
     const last = drawing.points[drawing.points.length - 1];
-    if (tool === 'pen' || tool === 'highlighter') this._holdStill(drawing, e);
+    if (pen) this._holdStill(drawing, e);
+    if (pen && !kept.length) return;
     if (tool === 'eraser') this._erase(last);
     else if (tool === 'select') this._inkSelect('move', last);
     else if (tool === 'laser') { this.laserTrail('local', drawing.slideId, added); this._inkProgress(drawing); }
@@ -164,7 +169,7 @@ export const Ink = (Base) => class extends Base {
       const point = this._inkPoint(e);
       const last = drawing.points[drawing.points.length - 1];
       if (drawing.straight) this._drawStraight(drawing, point);
-      else if (Math.hypot(point[0] - last[0], point[1] - last[1]) > 0.5) drawing.points.push([point[0], point[1], last[2]]);
+      else if (Math.hypot(point[0] - last[0], point[1] - last[1]) >= INK_SPACING - 1e-9) drawing.points.push([point[0], point[1], last[2]]);
     }
     this._endInk(drawing);
   }
