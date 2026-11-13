@@ -92,3 +92,32 @@ export async function connectInkServer(controller, { headers = () => pairHeaders
   })
   return true
 }
+
+/**
+ * A window that only shows ink (the audience window) follows the drawings
+ * file too, not only the live messages: a change it missed there (a request
+ * the stage room refused, a gap in the network) is put right with the next
+ * save. Pages this server does not let read the ink keep the live messages.
+ */
+export function followInkFile({ headers = () => pairHeaders(), hot = import.meta.hot } = {}) {
+  if (!hot) return
+  let reading = null, again = false
+  async function read() {
+    if (reading) { again = true; return }
+    reading = (async () => {
+      try {
+        const response = await fetch(BASE, { cache: 'no-store', headers: headers() })
+        if (response.ok) replaceInk((await response.json()).ink)
+      } catch {}
+    })()
+    await reading
+    reading = null
+    if (again) { again = false; read() }
+  }
+  hot.on('mdeck:ink', ({ renamed = [] } = {}) => {
+    for (const { from, to } of renamed) renameSlide(from, to)
+    read()
+  })
+  // What was saved before this window opened.
+  read()
+}

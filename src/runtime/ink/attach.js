@@ -4,10 +4,10 @@
 import { h, render } from 'preact'
 import { strokePath } from '../../core/ink.js'
 import { createInkController, readLog } from './controller.js'
-import { changeInk, renameSlide } from './store.js'
+import { changeInk } from './store.js'
 import { createInkBus, broadcastTransport } from './bus.js'
 import { InkToolbar } from './Toolbar.jsx'
-import { connectInkServer } from './server.js'
+import { connectInkServer, followInkFile } from './server.js'
 import { createInkSelection } from './select.js'
 
 const typing = target => target?.closest?.('input, textarea, select, [contenteditable=""], [contenteditable="true"]')
@@ -18,8 +18,8 @@ const channelName = storageKey => `mdeck-ink-live:${storageKey}`
 export function watchInk(stage, { storageKey, transports = [] } = {}) {
   stage.inkRenderer = strokePath
   for (const op of readLog(storageKey)) changeInk(op)
-  // Served by `mdeck dev`: slides that got an id while this window was open.
-  import.meta.hot?.on('mdeck:ink', ({ renamed = [] } = {}) => { for (const { from, to } of renamed) renameSlide(from, to) })
+  // Served by `mdeck run`: the saved changes and slides that got an id.
+  followInkFile()
   return createInkBus(stage, [broadcastTransport(channelName(storageKey)), ...transports])
 }
 

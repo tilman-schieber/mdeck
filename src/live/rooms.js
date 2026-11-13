@@ -257,7 +257,9 @@ export function weakKeyReason(key) {
 
 const MAX_BODY = 4096
 const MAX_STATE = 32768
-const MAX_INK = 65536
+// Live ink from the presenter: room for one stroke as long as a drawings file
+// keeps (MAX_POINTS in build/inkPlugin.js); the pages send batches of 60 KB.
+const MAX_INK = 256 * 1024
 // A picture the presenter's screen made smaller for the phones (src/live/client.js).
 const MAX_IMAGE = 200 * 1024
 // Pictures only, never SVG: a page could run its scripts from here.

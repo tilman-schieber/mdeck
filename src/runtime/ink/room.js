@@ -8,7 +8,7 @@
 // connections per server.
 import { stageRoom } from '../../live/client.js'
 import { presenceQuery } from '../../live/presence.js'
-import { retryDelay, compactOutbox } from './outbox.js'
+import { retryDelay, compactOutbox, batchSize } from './outbox.js'
 
 // Live ink waits this long to gather a batch; with one request at a time the
 // network sets the pace, so a short wait adds little load and little lag.
@@ -55,7 +55,7 @@ export function roomTransport({ receive = false, view = null, onPresence = null 
   }
 
   async function deliver() {
-    const messages = queue.splice(0, 100)
+    const messages = queue.splice(0, batchSize(queue))
     if (allowed === null) {
       let info
       try { info = await room.info() } catch { return retry(messages) }
@@ -68,6 +68,9 @@ export function roomTransport({ receive = false, view = null, onPresence = null 
       // A server that is busy or restarting gets them again, as a lost network does.
       if (response.status >= 500 || response.status === 429) return retry(messages)
       failures = 0
+      // Too large even alone (one very long stroke for an older server): the
+      // others miss it until the saved ink reaches them (attach.js).
+      if (response.status === 413) console.warn('mdeck: live ink too large for the stage room; the other screens get it from the saved drawings')
       if (response.ok) listeners = (await response.json()).listeners ?? 1
     } catch {
       // The network failed (an iPad's WLAN): send them again, or the others
