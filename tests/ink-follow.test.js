@@ -43,3 +43,15 @@ test('a page the server does not let read the ink keeps what it has', async () =
   await settle()
   assert.equal(slideStrokes('p'), before)
 })
+
+test('a phone in the follow view asks once: refused, it does not ask again after every save', async () => {
+  const handlers = {}
+  let asked = 0
+  globalThis.fetch = async () => { asked++; return { ok: false, status: 403, json: async () => ({ error: 'no' }) } }
+  followInkFile({ headers: () => ({}), hot: { on: (name, handler) => { handlers[name] = handler } } })
+  await settle()
+  changeInk({ type: 'add', slideId: 'slide-9', stroke: stroke('f:1') })
+  for (let i = 0; i < 3; i++) { handlers['mdeck:ink']({ renamed: i ? [] : [{ from: 'slide-9', to: 'named' }] }); await settle() }
+  assert.equal(asked, 1)
+  assert.equal(slideStrokes('named').length, 1, 'a slide that got its id still moves its ink')
+})

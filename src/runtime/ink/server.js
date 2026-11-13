@@ -97,17 +97,21 @@ export async function connectInkServer(controller, { headers = () => pairHeaders
  * A window that only shows ink (the audience window) follows the drawings
  * file too, not only the live messages: a change it missed there (a request
  * the stage room refused, a gap in the network) is put right with the next
- * save. Pages this server does not let read the ink keep the live messages.
+ * save. Pages this server does not let read the ink keep the live messages,
+ * and after the first refusal ask no more: every phone in the follow view
+ * hears each save, and would ask again each time.
  */
 export function followInkFile({ headers = () => pairHeaders(), hot = import.meta.hot } = {}) {
   if (!hot) return
-  let reading = null, again = false
+  let reading = null, again = false, refused = false
   async function read() {
+    if (refused) return
     if (reading) { again = true; return }
     reading = (async () => {
       try {
         const response = await fetch(BASE, { cache: 'no-store', headers: headers() })
-        if (response.ok) replaceInk((await response.json()).ink)
+        if (response.status === 403) refused = true
+        else if (response.ok) replaceInk((await response.json()).ink)
       } catch {}
     })()
     await reading
