@@ -1,12 +1,9 @@
 # Changelog
 
-## 3.18.1 — 2026-11-13
-
-- Fixed: strokes moved with the lasso on a paired iPad stayed in their old place in the audience window, when the move was larger than the stage room takes in one request (one line of handwriting could be). Live ink now goes in requests of at most 60 KB, and a stage room takes up to 256 KB. The audience window also follows the saved drawings while `mdeck run` runs, so a change it missed live is put right with the next save.
-
 ## 3.18.0 — 2026-11-13
 
 - `hidden: true` in a slide's settings leaves the slide out of the talk: the deck, the presenter view, the reader and PDFs skip it, and the page numbers count without it; it stays in the file and in the editor. The eye beside a slide in the editor's slide list hides it or shows it again. A built file, a file from `mdeck send` and a PDF keep nothing of a hidden slide: not its words, pictures, drawings or answers.
+- Fixed: strokes moved with the lasso on a paired iPad stayed in their old place in the audience window, when the move was larger than the stage room takes in one request (one line of handwriting could be). Live ink now goes in requests of at most 60 KB, and a stage room takes up to 256 KB. The audience window also follows the saved drawings while `mdeck run` runs, so a change it missed live is put right with the next save.
 
 ## 3.17.2 — 2026-11-11
 
