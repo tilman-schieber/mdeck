@@ -17,7 +17,7 @@ import { parseSlides } from '../core/parseSlides.js'
 import { setSlideMeta } from '../core/editDeck.js'
 import { slideTitle } from '../core/outline.js'
 import { slug } from '../live/code.js'
-import { inkFileFor, normalizeInk, emptyInk, applyOp, serializeInk, isSlideId } from '../core/ink.js'
+import { inkFileFor, normalizeInk, emptyInk, applyOp, serializeInk, isSlideId, isPageId, baseSlideId, pickInk } from '../core/ink.js'
 import { hashSource, isAllowedRequest, send, readJson, BACKUP_DIR } from './editorPlugin.js'
 import { markOwnWrite } from './ownWrites.js'
 import { expandDeck } from './include.js'
@@ -28,7 +28,7 @@ const BACKUPS_KEPT = 10
 const MAX_OPS = 1000
 const MAX_POINTS = 10000
 const MAX_IDS = 10000
-const OP_TYPES = ['add', 'remove', 'clear']
+const OP_TYPES = ['add', 'remove', 'clear', 'room', 'page']
 
 // Why a request's changes cannot be taken, or null when they are well formed.
 function badOps(ops) {
@@ -38,7 +38,9 @@ function badOps(ops) {
     if (!op || typeof op !== 'object' || !OP_TYPES.includes(op.type)) return 'Unknown change'
     if (!isSlideId(op.slideId)) return 'Not a slide id'
     if (op.type === 'add' && (!op.stroke || typeof op.stroke !== 'object' || !Array.isArray(op.stroke.points) || op.stroke.points.length > MAX_POINTS)) return `A stroke has at most ${MAX_POINTS} points`
-    if (op.type !== 'add' && (!Array.isArray(op.ids) || op.ids.length > MAX_IDS)) return `At most ${MAX_IDS} strokes per change`
+    if (op.type === 'room' && typeof op.open !== 'boolean') return 'A room is open or not'
+    if (op.type === 'page' && !isPageId(op.page)) return 'Not a page id'
+    if ((op.type === 'remove' || op.type === 'clear') && (!Array.isArray(op.ids) || op.ids.length > MAX_IDS)) return `At most ${MAX_IDS} strokes per change`
   }
   return null
 }
@@ -119,7 +121,7 @@ export function createInkFile(deckPath, { debounceMs = 300, onChange = () => {} 
     const moved = []
     ids.forEach((id, i) => {
       const from = before[i]
-      if (from !== id && !ids.includes(from) && !before.includes(id) && ink.slides[from]) {
+      if (from !== id && !ids.includes(from) && !before.includes(id) && (ink.slides[from] || ink.rooms[from] || ink.pages[from])) {
         ink = applyOp(ink, { type: 'rename', from, to: id })
         moved.push({ from, to: id })
       }
@@ -161,26 +163,30 @@ export function createInkFile(deckPath, { debounceMs = 300, onChange = () => {} 
         return fromIncludes.has(id)
       }
       for (const raw of ops) {
-        const op = { ...raw, slideId: alias.get(raw.slideId) ?? raw.slideId }
-        if (op.type === 'add') {
-          const index = deck.slides.findIndex(slide => slide.id === op.slideId)
-          if (index < 0 && !included(op.slideId)) return refuse(`No slide "${op.slideId}" in the deck any more`)
+        // A blank page's strokes (intro#p4k2) belong to their slide.
+        const base = baseSlideId(raw.slideId)
+        const layer = raw.slideId.slice(base.length)
+        const op = { ...raw, slideId: (alias.get(base) ?? base) + layer }
+        if (op.type === 'add' || (op.type === 'room' && op.open) || (op.type === 'page' && !op.remove)) {
+          const slideId = baseSlideId(op.slideId)
+          const index = deck.slides.findIndex(slide => slide.id === slideId)
+          if (index < 0 && !included(slideId)) return refuse(`No slide "${slideId}" in the deck any more`)
           const slide = deck.slides[index]
           if (slide && slide.meta.id == null) {
             // An id by position: only trusted for the deck the device saw.
             if (deckHash !== hash) return refuse('The deck changed; reload')
             const id = newSlideId(deck, slide, index)
-            renames.push({ from: op.slideId, to: id, before: hash })
-            source = setSlideMeta(deck, op.slideId, { id })
+            renames.push({ from: slideId, to: id, before: hash })
+            source = setSlideMeta(deck, slideId, { id })
             markOwnWrite(abs, source)
             writeAtomic(abs, source)
             deck = parseSlides(source)
             hash = hashSource(source)
             deckHash = hash
-            ink = applyOp(ink, { type: 'rename', from: op.slideId, to: id })
-            renamed.push({ from: op.slideId, to: id })
-            alias.set(op.slideId, id)
-            op.slideId = id
+            ink = applyOp(ink, { type: 'rename', from: slideId, to: id })
+            renamed.push({ from: slideId, to: id })
+            alias.set(slideId, id)
+            op.slideId = id + layer
           }
         }
         ink = applyOp(ink, op)
@@ -198,9 +204,10 @@ export function createInkFile(deckPath, { debounceMs = 300, onChange = () => {} 
       let deck
       try { deck = readDeck().deck } catch { deck = { deckConfig: {} } }
       current(deck)
-      if (slideId === null ? !Object.keys(ink.slides).length : !ink.slides[slideId]) return
-      if (slideId === null) ink = emptyInk(size(deck))
-      else ink = applyOp(ink, { type: 'remove', slideId, ids: (ink.slides[slideId] ?? []).map(stroke => stroke.id) })
+      // A slide's drawings are its own, its room and its blank pages.
+      const has = id => [ink.slides, ink.rooms, ink.pages].some(map => Object.keys(map).some(key => id === null || baseSlideId(key) === id))
+      if (!has(slideId)) return
+      ink = slideId === null ? emptyInk(size(deck)) : pickInk(ink, id => id !== slideId)
       flush()
       onChange({ renamed: [] })
     },

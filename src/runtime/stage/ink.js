@@ -1,4 +1,4 @@
-import { inkPaint, snapAngle, spacedPoints, INK_SPACING } from '../../core/ink.js';
+import { inkPaint, snapAngle, spacedPoints, INK_SPACING, pageLayer, ROOM_SCALE } from '../../core/ink.js';
 
 const CLICK_AFTER_INK_MS = 400;
 // Holding the pen still this long turns the stroke into a straight line.
@@ -49,7 +49,32 @@ export const Ink = (Base) => class extends Base {
   get inkFinger() { return this.hasAttribute('data-ink-finger'); }
   set inkFinger(on) { this.toggleAttribute('data-ink-finger', !!on); }
 
-  _inkSlideId() { return this._slides[this._index]?.dataset.slideId ?? null; }
+  // The ink id drawn on: the slide's, or that of its blank page on the screen.
+  _inkSlideId() {
+    const id = this.inkBaseSlideId();
+    const page = id && this.pageShown;
+    return page ? pageLayer(id, page) : id;
+  }
+  /** The slide shown, also while one of its blank pages covers it. */
+  inkBaseSlideId() { return this._slides[this._index]?.dataset.slideId ?? null; }
+  /** The id of the blank page on the screen (ink/Room.jsx), or null: the last one shown covers the others. */
+  get pageShown() {
+    const shown = this._slides[this._index]?.querySelectorAll(':scope > .slide-page[data-step-visible]');
+    return shown?.length ? shown[shown.length - 1].dataset.page : null;
+  }
+  /** Goes to one of the slide's blank pages; false while it is not on the slide yet. */
+  showPage(pageId, reason = 'api') {
+    const slide = this._slides[this._index];
+    const step = this._getSteps(slide).findIndex(elements => elements.some(el => el.classList.contains('slide-page') && el.dataset.page === pageId));
+    if (step < 0) return false;
+    this._stepMap.set(this._index, step);
+    this._applySteps(this._index);
+    this._broadcastState(reason);
+    return true;
+  }
+  // On an expanded slide everything is drawn smaller: what is written there
+  // is as thick on the screen as on a whole slide.
+  _inkReach() { return this.expanded ? 1 / ROOM_SCALE : 1; }
 
   _inkPoint(e) {
     const rect = this._canvas.getBoundingClientRect();
@@ -79,7 +104,7 @@ export const Ink = (Base) => class extends Base {
     if (this._inkDrawing || !this._inkTakes(e)) return;
     e.preventDefault();
     e.stopPropagation();
-    let tool = { ...this.inkTool };
+    let tool = { ...this.inkTool, size: this.inkTool.size * this._inkReach() };
     const point = this._inkPoint(e);
     // A selection (picked with a finger, or the select tool) takes the pen
     // that lands on it: on an end point's handle or inside its box. Landing
@@ -281,7 +306,7 @@ export const Ink = (Base) => class extends Base {
   _erase(point) {
     const slideId = this._inkDrawing?.slideId ?? this._inkSlideId();
     if (!slideId) return;
-    this.dispatchEvent(new CustomEvent('inkerase', { detail: { slideId, point, radius: 14, gesture: this._inkDrawing?.gesture ?? 0 }, bubbles: true, composed: true }));
+    this.dispatchEvent(new CustomEvent('inkerase', { detail: { slideId, point, radius: 14 * this._inkReach(), gesture: this._inkDrawing?.gesture ?? 0 }, bubbles: true, composed: true }));
   }
 
   _inkSelect(phase, point, drawing = this._inkDrawing) {

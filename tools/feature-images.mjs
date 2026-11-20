@@ -212,7 +212,7 @@ try {
   await presenter.screenshot({ width: 1440, height: 900 })
   await delay(1500)
   const stage = "document.querySelector('iframe').contentDocument.querySelector('deck-stage')"
-  const hotspotSlide = await presenter.evaluate(`[...${stage}.querySelectorAll(':scope > section')].findIndex(s => s.dataset.slideId === 'zoom-in-on-a-part')`)
+  const hotspotSlide = await presenter.evaluate(`[...${stage}.querySelectorAll(':scope > section:not([data-extra-page])')].findIndex(s => s.dataset.slideId === 'zoom-in-on-a-part')`)
   for (let i = 0; i < 60 && await presenter.evaluate(`${stage}.index`) < hotspotSlide; i++) {
     await presenter.evaluate("[...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Next').click(); true")
     await delay(150)

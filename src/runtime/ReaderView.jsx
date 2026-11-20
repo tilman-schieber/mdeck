@@ -4,13 +4,14 @@ import { useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import { marked } from 'marked'
 import { renderCitations } from './citations.js'
 import { deckOutline } from '../core/outline.js'
-import { manifests, SlideRenderer } from '../layouts/renderSlide'
+import { manifests, SlideRenderer, SlideExtraPages } from '../layouts/renderSlide'
+import { StageRoom } from './ink/Room.jsx'
 import { loadTheme, THEME_METAS } from './themeLoader'
 import './reader.css'
 import { t, stageLabels } from '../core/labels.js'
 import { followActiveRooms } from '../live/follow.js'
 import { Icon } from '../components/Icon.jsx'
-import { currentInk, onInkChange } from './ink/store.js'
+import { currentInk, onInkChange, showExtras } from './ink/store.js'
 import { fitDeck, fitSlide } from './fit.js'
 import { languageName } from '../core/languages.js'
 
@@ -29,7 +30,7 @@ function restoreLook(deckConfig) {
   return { appearance: ['light', 'dark'].includes(stored?.appearance) ? stored.appearance : '', drawings: stored?.drawings !== false }
 }
 
-const hasInk = () => Object.values(currentInk()?.slides ?? {}).some(strokes => strokes?.length)
+const hasInk = () => Object.values(currentInk()?.slides ?? {}).some(strokes => strokes?.length) || Object.keys(currentInk()?.pages ?? {}).length > 0
 
 // Every button carries an icon so the bar reads at a glance.
 const ReaderIcon = ({ name }) => <Icon name={name} class="reader-icon" />
@@ -46,6 +47,7 @@ function initialIndex(slides) {
   return Number.isInteger(n) && n >= 1 && n <= slides.length ? n - 1 : 0
 }
 
+// What was written around a slide or on blank pages after it follows it (ink/Room.jsx).
 function ReadPage({ slide, index, total, deckConfig, width, height, scale, showNotes }) {
   const notes = slide.meta.notes ?? ''
   return <article class="reader-page" id={`reader-page-${index}`}>
@@ -54,6 +56,10 @@ function ReadPage({ slide, index, total, deckConfig, width, height, scale, showN
         <SlideRenderer id={slide.id} regions={slide.regions} meta={slide.meta} content={slide.content} deckConfig={deckConfig} index={index} total={total} />
       </div>
     </div>
+    <SlideExtraPages id={slide.id} regions={slide.regions} meta={slide.meta} content={slide.content} deckConfig={deckConfig} index={index} total={total}
+      wrap={(page, key) => <div key={key} class="reader-page-frame reader-page-extra" style={{ aspectRatio: `${width} / ${height}` }}>
+        <div class="reader-page-scale" style={{ width: `${width}px`, height: `${height}px`, transform: `scale(${scale})` }}>{page}</div>
+      </div>} />
     {showNotes && notes && <div class="reader-page-notes" dangerouslySetInnerHTML={{ __html: marked.parse(renderCitations(notes).markdown) }} />}
   </article>
 }
@@ -90,6 +96,8 @@ export function ReaderView({ deck, deckConfig, mode: startMode = 'slides', langu
     try { localStorage.setItem(lookKey(deckConfig), JSON.stringify({ appearance, drawings })) } catch {}
   }, [appearance, drawings])
   useEffect(() => onInkChange(() => setInked(hasInk())), [])
+  // Without the drawings, no room to write either (ink/Room.jsx).
+  useEffect(() => { showExtras(drawings) }, [drawings])
   // Another language of a deck read as pages opens on the page that showed.
   useEffect(() => { if (startMode === 'read') document.getElementById(`reader-page-${index}`)?.scrollIntoView({ block: 'start' }) }, [])
 
@@ -199,7 +207,9 @@ export function ReaderView({ deck, deckConfig, mode: startMode = 'slides', langu
           ? <>
             <div class="reader-stage-wrap">
               <deck-stage ref={stageRef} width={width} height={height}>
-                {slides.map((slide, i) => <SlideRenderer key={slide.id} id={slide.id} regions={slide.regions} meta={slide.meta} content={slide.content} deckConfig={deckConfig} index={i} total={slides.length} />)}
+                <StageRoom key="#room" />
+                {slides.map((slide, i) => [<SlideRenderer key={slide.id} id={slide.id} regions={slide.regions} meta={slide.meta} content={slide.content} deckConfig={deckConfig} index={i} total={slides.length} />,
+                  <SlideExtraPages key={`${slide.id}#extra`} id={slide.id} regions={slide.regions} meta={slide.meta} content={slide.content} deckConfig={deckConfig} index={i} total={slides.length} />])}
               </deck-stage>
             </div>
             <div class="reader-bottom">

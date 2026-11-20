@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Room to write, from the drawing toolbar (after an idea and a first version by @omuelken, #39 and #40). **Expand** shows the slide at two thirds of its size in the top left corner with room around it: the same slide from further away, so its drawings stay on it and what is written around it is its own ink. **Blank page** adds an empty page after the slide, and another after that; forward and back turn them like slides. Both are kept in the drawings file (`rooms`, and `pages` with a page's strokes under `<slide id>#<page id>`), all windows follow, and the reader and PDFs show them as pages after the slide.
+
 ## 3.18.2 — 2026-11-20
 
 - The ink toolbar keeps its buttons in place: colours and sizes come first and stay there, dimmed, while the select tool, the laser or the eraser is in use (a tap on one goes back to the pen or highlighter), and the bin for a selection is always there, greyed out until something is selected.

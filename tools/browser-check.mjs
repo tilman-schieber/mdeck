@@ -121,6 +121,22 @@ try {
   assert.equal(await inked.evaluate("document.querySelector('deck-stage').index"), 0, 'drawing does not change slides')
   await inked.evaluate("document.querySelector('.ink-btn[title=Undo]').click()")
   await until(inked, "document.querySelectorAll('.slide-ink path').length === 1")
+  // Room to write. Expand shows the slide small in the top left corner, the
+  // room's ink on the stage's own layer; the button again shows it whole.
+  const inkButton = title => `[...document.querySelectorAll('.ink-btn')].find(b => b.title.startsWith(${JSON.stringify(title)})).click()`
+  await inked.evaluate(inkButton('Expand'))
+  await until(inked, "document.querySelector('deck-stage').expanded && document.querySelectorAll('.deck-room-ink path').length === 1")
+  // It moves there; then the slide is at two thirds of its size.
+  await until(inked, "(() => { const s = document.querySelector('deck-stage'), c = s._canvas.getBoundingClientRect(), r = s.getBoundingClientRect(); return Math.round(c.width / Math.min(r.width, r.height * 16 / 9) * 100) === 67 })()")
+  await inked.evaluate(inkButton('Show the slide whole'))
+  await until(inked, "!document.querySelector('deck-stage').expanded && !document.querySelector('deck-stage').hasAttribute('data-room')")
+  // A blank page follows the slide as its last step and has ink of its own; undo takes it away.
+  await inked.evaluate(inkButton('Blank page'))
+  await until(inked, "!!document.querySelector('deck-stage').pageShown")
+  assert.match(await inked.evaluate("document.querySelector('deck-stage')._inkSlideId()"), /^marked#p[a-z0-9]+$/)
+  assert.equal(await inked.evaluate("document.querySelector('deck-stage').index"), 0, 'a blank page belongs to its slide')
+  await inked.evaluate("document.querySelector('.ink-btn[title=Undo]').click()")
+  await until(inked, "!document.querySelector('deck-stage').pageShown && !document.querySelector('[data-deck-active] > .slide-page')")
   const inkRead = await open('ink.html?view=reader')
   await until(inkRead, "[...document.querySelectorAll('.reader-btn')].some(b => b.textContent.includes('Read'))")
   await inkRead.evaluate("[...document.querySelectorAll('.reader-btn')].find(b => b.textContent.includes('Read')).click()")
@@ -1015,7 +1031,7 @@ try {
   assert.equal(await flow.evaluate(`${flowStage}.state.step`), 1, 'two presses show the whole drawing')
   await flow.close()
 
-  console.log('Browser checks passed: custom layout rendering, data from a CSV file as a chart that builds up and a table, slide times and a rehearsal, the phone clicker with the slide\'s controls and the join code over the slide, shared state of deck components, reveal/undo/reset synchronization, jumping to a slide by its number, a black screen, a frozen audience window and the overview of all slides, session isolation, launch page, poll relay, scale, open questions, word cloud and join code, several answers with keys, closing and the right answer on the phones, options as a list, numbers, a tap on a picture, results kept beside the deck and shown in a build, saved ink, drawing, drawing in the presenter view, touch (fingers swipe through slides), straight lines (snapping to 15° steps) and their end points, select and move, laser (kept while the pen is down, never joined to the next trail), zoom, saving ink in dev, following on another device, a second device through the stage room (also the join code and freezing the projector), video played on the iPad playing on the projector, a deck in three languages (the switch, the audience and a follower, right to left), and in one browser without a server (also with a standalone server for the polls), hotspots (keys on the presenter slide, flights the audience follows, leaving them), the keys that work now (?), and a drawing that builds up in numbered steps with parts to zoom to, with ids of its own on each slide.')
+  console.log('Browser checks passed: custom layout rendering, data from a CSV file as a chart that builds up and a table, slide times and a rehearsal, the phone clicker with the slide\'s controls and the join code over the slide, shared state of deck components, reveal/undo/reset synchronization, jumping to a slide by its number, a black screen, a frozen audience window and the overview of all slides, session isolation, launch page, poll relay, scale, open questions, word cloud and join code, several answers with keys, closing and the right answer on the phones, options as a list, numbers, a tap on a picture, results kept beside the deck and shown in a build, saved ink, drawing, room to write (expanding a slide, a blank page), drawing in the presenter view, touch (fingers swipe through slides), straight lines (snapping to 15° steps) and their end points, select and move, laser (kept while the pen is down, never joined to the next trail), zoom, saving ink in dev, following on another device, a second device through the stage room (also the join code and freezing the projector), video played on the iPad playing on the projector, a deck in three languages (the switch, the audience and a follower, right to left), and in one browser without a server (also with a standalone server for the polls), hotspots (keys on the presenter slide, flights the audience follows, leaving them), the keys that work now (?), and a drawing that builds up in numbered steps with parts to zoom to, with ids of its own on each slide.')
 } finally {
   await browser?.close()
   await tablet2?.close()

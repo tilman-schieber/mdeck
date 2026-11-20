@@ -21,7 +21,7 @@ addEventListener('unhandledrejection', event => window.__report.push('error: ' +
 
 // Runs in the page for the slide on screen: what is cut off or hard to read.
 export const MEASURE = `(() => {
-  const slide = document.querySelector('deck-stage').querySelectorAll(':scope > section')[window.__index]
+  const slide = document.querySelector('deck-stage').querySelectorAll(':scope > section:not([data-extra-page])')[window.__index]
   const problems = []
   const frame = slide.getBoundingClientRect()
   const scale = frame.width / slide.offsetWidth

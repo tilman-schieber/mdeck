@@ -28,7 +28,7 @@ export const stylesheet = `
 
   /* Slides live in light DOM (via <slot>) so authored CSS still applies.
      We absolutely position each slotted child to stack them. */
-  ::slotted(*) {
+  slot:not([name])::slotted(*) {
     position: absolute !important;
     inset: 0 !important;
     width: 100% !important;
@@ -39,11 +39,17 @@ export const stylesheet = `
     pointer-events: none;
     visibility: hidden;
   }
-  ::slotted([data-deck-active]) {
+  slot:not([name])::slotted([data-deck-active]) {
     opacity: 1;
     pointer-events: auto;
     visibility: visible;
   }
+
+  /* The room around an expanded slide (stage/zoom.js): its ground behind
+     the slides and its ink above them, as far as the slide's surface
+     reaches at ROOM_SCALE (two thirds: one and a half times each way). */
+  slot[name]::slotted(*) { position: absolute; left: 0; top: 0; width: 150%; height: 150%; display: none; pointer-events: none; overflow: hidden; }
+  :host([data-room]:not([data-overview]):not([data-deck-static])) slot[name]::slotted(*) { display: block; }
 
   /* Ink: the pen and the mouse are taken on the window (see "Ink input"),
      so fingers keep reaching the slides. Only when fingers draw too, a
@@ -121,7 +127,7 @@ export const stylesheet = `
   :host([data-overview]) .stage { display: block; overflow-x: hidden; overflow-y: auto; touch-action: pan-y; -webkit-overflow-scrolling: touch; }
   :host([data-overview]) .canvas { position: absolute; left: 0; top: 0; transform-origin: 0 0; background: none; }
   :host([data-overview]) .ov-sizer { display: block; }
-  :host([data-overview]) ::slotted(*) {
+  :host([data-overview]) slot:not([name])::slotted(*) {
     inset: auto !important;
     left: var(--ov-x, 0) !important;
     top: var(--ov-y, 0) !important;
@@ -371,7 +377,7 @@ export const stylesheet = `
       background: none;
       will-change: auto;
     }
-    ::slotted(*) {
+    slot:not([name])::slotted(*) {
       position: relative !important;
       inset: auto !important;
       width: var(--deck-design-w) !important;
@@ -385,10 +391,11 @@ export const stylesheet = `
       break-inside: avoid;
       overflow: hidden;
     }
-    ::slotted(*:last-child) {
+    slot:not([name])::slotted(*:last-child) {
       break-after: auto;
       page-break-after: auto;
     }
     .overlay, .ink-input, .ink-live, .ink-laser, .zoom-reset, .hotspots, .blank, .ov-cells, .ov-sizer { display: none !important; }
+    slot[name]::slotted(*) { display: none !important; }
   }
 `;

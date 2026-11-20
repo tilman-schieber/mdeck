@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { resolve } from 'node:path'
-import { inkFileFor, emptyInk, normalizeInk, validateInk, orphanIds, applyOp, isSlideId, hitTest, strokePath, inkOrder, translateStroke, insidePolygon, strokesInLasso, strokesBox, inkPaint, snapAngle, spacedPoints, INK_SPACING } from '../src/core/ink.js'
+import { inkFileFor, emptyInk, normalizeInk, validateInk, orphanIds, applyOp, isSlideId, hitTest, strokePath, inkOrder, translateStroke, insidePolygon, strokesInLasso, strokesBox, inkPaint, snapAngle, spacedPoints, INK_SPACING, serializeInk, baseSlideId, pageOf, reachesRoom, hasRoomPage, pickInk } from '../src/core/ink.js'
 import { paletteTokens } from '../src/extensions/appearance.js'
 import { slidesPlugin } from '../src/build/slidesPlugin.js'
 import { checkDeck } from '../src/build/check.js'
@@ -209,4 +209,46 @@ test('built files leave out what is on hidden slides: its words, drawings and an
   assert.deepEqual(Object.keys(json(load('virtual:deck-ink', { stripHidden: true })).slides), ['slide-3'])
   assert.deepEqual(Object.keys(json(load('virtual:deck-results', { stripHidden: true })).rooms), ['shown'])
   assert.deepEqual(Object.keys(json(load('virtual:deck-ink', {})).slides), ['slide-2', 'slide-3'])
+})
+
+test('room around a slide and blank pages after it are kept with the ink, move with the slide and are left out of the file while there are none', () => {
+  const stroke = (id, x = 1) => ({ id, tool: 'pen', color: '#e11d48', size: 6, points: [[x, 2, 0.5]] })
+  let ink = applyOp(emptyInk(), { type: 'room', slideId: 'intro', open: true })
+  ink = applyOp(ink, { type: 'page', slideId: 'intro', page: 'p1' })
+  ink = applyOp(ink, { type: 'page', slideId: 'intro', page: 'p2', at: 0 })
+  ink = applyOp(ink, { type: 'add', slideId: 'intro#p1', stroke: stroke('a:1') })
+  assert.deepEqual(ink.pages, { intro: ['p2', 'p1'] }, 'a page goes where it is asked for')
+  assert.equal(applyOp(ink, { type: 'page', slideId: 'intro', page: 'p1' }), ink, 'the same page twice is one page')
+  assert.equal(applyOp(ink, { type: 'page', slideId: 'intro#p1', page: 'p3' }), ink, 'a page has no pages')
+  assert.equal(applyOp(ink, { type: 'page', slideId: 'intro', page: 'nope' }), ink, 'a page id starts with p')
+  assert.equal(applyOp(ink, { type: 'room', slideId: 'intro', open: true }), ink)
+  const moved = applyOp(ink, { type: 'rename', from: 'intro', to: 'start' })
+  assert.deepEqual(moved.rooms, { start: { open: true } })
+  assert.deepEqual(moved.pages, { start: ['p2', 'p1'] })
+  assert.deepEqual(Object.keys(moved.slides), ['start#p1'])
+  const back = normalizeInk(JSON.parse(serializeInk(moved)))
+  assert.deepEqual([back.rooms, back.pages, back.slides], [moved.rooms, moved.pages, moved.slides])
+  assert.deepEqual(orphanIds(moved, [{ id: 'other' }]), ['start'])
+  assert.deepEqual(orphanIds(moved, [{ id: 'start' }]), [])
+  assert.doesNotMatch(serializeInk(emptyInk()), /rooms|pages/)
+  // Closing the room keeps that the slide has one; removing the last page leaves none.
+  assert.deepEqual(applyOp(moved, { type: 'room', slideId: 'start', open: false }).rooms, { start: { open: false } })
+  assert.equal(applyOp(emptyInk(), { type: 'room', slideId: 'a', open: false }).rooms.a, undefined, 'a slide never expanded has no room')
+  const one = applyOp(moved, { type: 'page', slideId: 'start', page: 'p2', remove: true })
+  assert.deepEqual(one.pages, { start: ['p1'] })
+  assert.deepEqual(applyOp(one, { type: 'page', slideId: 'start', page: 'p1', remove: true }).pages, {})
+  assert.deepEqual([baseSlideId('start#p1'), pageOf('start#p1'), pageOf('start'), baseSlideId('a#b')], ['start', 'p1', null, 'a#b'])
+  // The room's ink is the slide's own, beyond its right or lower edge; only
+  // a slide that was expanded has a page for it in print.
+  assert.equal(reachesRoom([stroke('a:2', 1900)], 1920, 1080), false)
+  assert.equal(reachesRoom([stroke('a:2', 2000)], 1920, 1080), true)
+  const wide = applyOp(moved, { type: 'add', slideId: 'start', stroke: stroke('a:3', 2000) })
+  assert.equal(hasRoomPage(wide, 'start'), true)
+  assert.equal(hasRoomPage(moved, 'start'), false, 'nothing written around it')
+  assert.equal(hasRoomPage({ ...wide, rooms: {} }, 'start'), false, 'a stroke that left a slide never expanded')
+  // A build without a slide leaves out all that belongs to it.
+  const picked = pickInk(applyOp(wide, { type: 'add', slideId: 'other', stroke: stroke('a:4') }), id => id !== 'start', id => id === 'other' ? 'slide-1' : id)
+  assert.deepEqual([Object.keys(picked.slides), picked.rooms, picked.pages], [['slide-1'], {}, {}])
+  const kept = pickInk(wide, () => true, id => id === 'start' ? 'slide-3' : id)
+  assert.deepEqual([Object.keys(kept.slides).sort(), kept.rooms, kept.pages], [['slide-3', 'slide-3#p1'], { 'slide-3': { open: true } }, { 'slide-3': ['p2', 'p1'] }])
 })

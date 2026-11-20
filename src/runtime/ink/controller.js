@@ -3,8 +3,8 @@
 // change on to the other windows (bus.js). Every change goes to
 // `save(op)` when a server keeps the ink file; otherwise it is kept in this
 // browser (localStorage) and the file can be downloaded.
-import { currentInk, changeInk, slideStrokes, resolveSlideId } from './store.js'
-import { hitTest, serializeInk } from '../../core/ink.js'
+import { currentInk, changeInk, slideStrokes, slidePages, roomOpen, resolveSlideId } from './store.js'
+import { hitTest, serializeInk, pageLayer } from '../../core/ink.js'
 import { inkFileName } from 'virtual:deck-ink'
 
 function deviceId() {
@@ -109,6 +109,28 @@ export function createInkController({ storageKey, save = null, publish = () => {
       commit([{ type: 'clear', slideId, ids: strokes.map(stroke => stroke.id) }], strokes.map(stroke => ({ type: 'add', slideId, stroke })))
     },
 
+    /**
+     * Expands the slide, with room around it (core/ink.js), or shows it whole
+     * again. It changes the view, not what is written, so undo leaves it.
+     */
+    setRoom(slideId, open) {
+      if (roomOpen(slideId) !== !!open) send([{ type: 'room', slideId, open: !!open }])
+    },
+    /** Adds a blank page after the slide, as its `at`-th, and returns its id; undo takes it away. */
+    addPage(slideId, at) {
+      const page = `p${Date.now().toString(36)}${(counter++).toString(36)}`
+      commit([{ type: 'page', slideId, page, at }], [{ type: 'page', slideId, page, remove: true }])
+      return page
+    },
+    /** Takes a blank page away, with what was written on it; undo brings both back. */
+    removePage(slideId, page) {
+      const at = slidePages(slideId).indexOf(page)
+      if (at < 0) return
+      const layer = pageLayer(slideId, page)
+      const strokes = slideStrokes(layer)
+      commit([...strokes.length ? [{ type: 'clear', slideId: layer, ids: strokes.map(stroke => stroke.id) }] : [], { type: 'page', slideId, page, remove: true }],
+        [{ type: 'page', slideId, page, at }, ...strokes.map(stroke => ({ type: 'add', slideId: layer, stroke }))])
+    },
     undo() {
       const entry = undoStack.pop()
       if (!entry) return

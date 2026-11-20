@@ -237,7 +237,7 @@ function Drawings({ drawings, file, onRefresh, onError }) {
         <span class="home-tile-icon"><HomeIcon name="pen" size={18} /></span>
         <div class="home-output-body">
           <strong>{entry.slide ? `Slide ${entry.slide}: ${entry.title}` : entry.id}</strong>
-          <span>{strokes(entry.strokes)}{entry.slide ? '' : ' · on a slide the deck no longer has'}</span>
+          <span>{strokes(entry.strokes)}{entry.pages ? ` · ${entry.pages === 1 ? '1 blank page' : `${entry.pages} blank pages`}` : ''}{entry.slide ? '' : ' · on a slide the deck no longer has'}</span>
         </div>
         <DropButton label={`Drop the drawings on ${entry.slide ? `slide ${entry.slide}` : entry.id}`} onClick={() => drop({ action: 'drop-drawings', slide: entry.id }, onRefresh, onError)} />
       </li>)}

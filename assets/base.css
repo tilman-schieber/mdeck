@@ -277,6 +277,38 @@ deck-stage[data-ink-hidden] .slide-ink { display: none; }
 /* The overview (O) shows each slide whole, to find it by. */
 deck-stage[data-overview] [data-step] { opacity: 1; }
 
+/* ── Room to write (runtime/ink/Room.jsx) ─────────────────────────────────
+   An expanded slide shows small in the top left corner of the stage, on the
+   deck's ground; its ink, which reaches into the room, is drawn by the
+   stage's own layer meanwhile. */
+.deck-room { background: var(--bg); }
+deck-stage[data-room]:not([data-overview]):not([data-deck-static]) > [data-deck-active] > .slide-ink { display: none; }
+deck-stage[data-ink-hidden] > .deck-room-ink { visibility: hidden; }
+/* A blank page after a slide: on the stage one of its last steps, above it. */
+.slide-page { position: absolute; inset: 0; z-index: 60; background: var(--bg); }
+.slide-page:not([data-step-visible]) { visibility: hidden; pointer-events: none; }
+[data-deck-static] .slide-page { display: none; }
+/* In print and the reader's Read mode both follow the slide as pages. */
+section[data-extra-page] { display: none; }
+deck-stage[data-deck-static] > section[data-extra-page],
+.reader-page-extra section[data-extra-page] { display: flex; }
+.room-copy { position: absolute; top: 0; inset-inline-start: 0; overflow: hidden; }
+.room-scale { transform-origin: 0 0; }
+[dir=rtl] .room-scale { transform-origin: 100% 0; }
+/* The copy of the slide: finished, still, and without its page number, which
+   is hidden rather than left out, so the slide's drawings stay in place. The
+   page's own layer draws the ink, the room's with it. */
+.slide-copy, .slide-copy > .slide { width: 100%; height: 100%; }
+.slide-copy { pointer-events: none; }
+.slide-copy .slide-ink { display: none; }
+[data-slide-copy] [data-step] { opacity: 1; transition: none; }
+.slide-copy .slide-footer > span:last-child:not(:first-child),
+.slide-copy .slide-footer > span:last-child:not(:first-child)::before,
+.slide-copy .slide-footer > span:last-child:not(:first-child)::after { visibility: hidden !important; }
+/* Neither the copy nor a page after the slide is a slide of its own: a deck
+   that numbers its slides with a CSS counter does not count them. */
+.slide-copy .slide, section[data-extra-page] { counter-increment: none !important; }
+
 /* ── Print ───────────────────────────────────────────────────────────────── */
 @media print {
   html, body, deck-stage { background: #fff !important; }

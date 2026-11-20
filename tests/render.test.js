@@ -22,7 +22,7 @@ function htmlFragments(node) {
   if (!node || typeof node !== 'object') return ''
   if (Array.isArray(node)) return node.map(htmlFragments).join('\n')
   // Components with hooks cannot be called outside a render; they add no slide HTML.
-  if (typeof node.type === 'function' && !['HtmlContent', 'InkLayer'].includes(node.type.name)) return htmlFragments(node.type(node.props))
+  if (typeof node.type === 'function' && !['HtmlContent', 'InkLayer', 'PageSteps', 'ExtraPages'].includes(node.type.name)) return htmlFragments(node.type(node.props))
   return [node.props?.html, node.props?.dangerouslySetInnerHTML?.__html, htmlFragments(node.props?.children)].filter(Boolean).join('\n')
 }
 
@@ -70,7 +70,7 @@ test('lecture callouts are labelled in the deck language, and a written title wi
 test("a chapter slide's label is in the deck's language, and a regional code uses it too", () => {
   // The label is plain text in the layout's markup, not HTML from Markdown.
   const texts = node => typeof node === 'string' ? node : Array.isArray(node) ? node.map(texts).join(' ') : !node || typeof node !== 'object' ? ''
-    : typeof node.type === 'function' && !['HtmlContent', 'InkLayer'].includes(node.type.name) ? texts(node.type(node.props)) : texts(node.props?.children)
+    : typeof node.type === 'function' && !['HtmlContent', 'InkLayer', 'PageSteps', 'ExtraPages'].includes(node.type.name) ? texts(node.type(node.props)) : texts(node.props?.children)
   const chapter = () => texts(SlideRenderer({ meta: { layout: 'chapter', number: 2 }, content: '# Methods', deckConfig: {}, index: 0 }))
   setDeckLanguage({ lang: 'de-CH' })
   setCalloutLabels({ lang: 'de-CH' })

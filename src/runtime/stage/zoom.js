@@ -1,6 +1,7 @@
 import { zoomToCamera, cameraToZoom } from '../hotspots.js';
 import { flight, durationFor, ease } from '../zoom/camera.js';
 import { TAP_SLOP } from './taps.js';
+import { ROOM_SCALE } from '../../core/ink.js';
 
 // Zoom: up to this many times the fitted size.
 // Zoom --------------------------------------------------------------------
@@ -14,6 +15,11 @@ import { TAP_SLOP } from './taps.js';
 // starts whole. `zoomchange` ({ slideId, scale, x, y, reason }) lets
 // other windows show the same part (setZoom with reason 'remote', which
 // is not announced again).
+//
+// An expanded slide (ink/Room.jsx) is the same view from further away: the
+// slide at ROOM_SCALE in the top left corner and room to write around it,
+// which is the slide's own surface, only larger. Zooming and moving then
+// go as far as that room does.
 export const ZOOM_MAX = 6;
 
 export const Zoom = (Base) => class extends Base {
@@ -27,7 +33,40 @@ export const Zoom = (Base) => class extends Base {
   }
 
   get zoom() {
-    return this._zoom ? { ...this._zoom } : { scale: 1, x: this.designWidth / 2, y: this.designHeight / 2 };
+    return this._zoom ? { ...this._zoom } : this._wholeZoom();
+  }
+
+  // The view without a zoom: the whole slide, or the expanded slide and its room.
+  _zoomMin() { return this.expanded ? ROOM_SCALE : 1; }
+  _wholeZoom() {
+    const scale = this._zoomMin();
+    return { scale, x: this.designWidth / scale / 2, y: this.designHeight / scale / 2 };
+  }
+
+  /** Whether the slide shows small, with room around it. */
+  get expanded() { return this.hasAttribute('data-expanded'); }
+  /**
+   * Shows the slide small in the top left corner with room around it, or
+   * whole again; `animate` moves there. The room and its ink (the stage's
+   * `room` slots) show while data-room is set, which outlasts the way back.
+   */
+  setExpanded(on, { animate = true } = {}) {
+    on = !!on;
+    if (on === this.expanded) return;
+    this._stopZoomFlight();
+    this._hotspot = null;
+    this._zoom = null;
+    this.removeAttribute('data-zoomed');
+    this.toggleAttribute('data-expanded', on);
+    if (on) this.setAttribute('data-room', '');
+    clearTimeout(this._roomTimer);
+    const still = !animate || document.hidden || this.hasAttribute('noscale') || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    this._canvas.style.transition = still ? '' : 'transform 240ms ease';
+    this._fit();
+    const settle = () => { this._canvas.style.transition = ''; if (!this.expanded) this.removeAttribute('data-room'); };
+    if (still) settle();
+    else this._roomTimer = setTimeout(settle, 260);
+    this.dispatchEvent(new CustomEvent('expandchange', { detail: { expanded: on } }));
   }
 
   setZoom(zoom, reason = 'api', { announce = true, flying = false } = {}) {
@@ -47,14 +86,15 @@ export const Zoom = (Base) => class extends Base {
   // Keeps the view on the slide; null when it shows the whole slide.
   _clampZoom(zoom) {
     if (!zoom) return null;
-    const scale = Math.min(ZOOM_MAX, Math.max(1, Number(zoom.scale) || 1));
-    if (scale <= 1.01) return null;
+    const min = this._zoomMin();
+    const scale = Math.min(ZOOM_MAX, Math.max(min, Number(zoom.scale) || 1));
+    if (scale <= min * 1.01) return null;
     const rect = this.getBoundingClientRect();
     // Half the view, in design pixels; a view wider than the slide stays centred.
     const half = length => length / 2 / ((this._fitScale || 1) * scale);
     const clamp = (value, h, size) => h >= size / 2 ? size / 2 : Math.min(size - h, Math.max(h, value));
-    const x = clamp(Number(zoom.x), half(rect.width || window.innerWidth), this.designWidth);
-    const y = clamp(Number(zoom.y), half(rect.height || window.innerHeight), this.designHeight);
+    const x = clamp(Number(zoom.x), half(rect.width || window.innerWidth), this.designWidth / min);
+    const y = clamp(Number(zoom.y), half(rect.height || window.innerHeight), this.designHeight / min);
     return { scale: Math.round(scale * 1000) / 1000, x: Math.round(x * 10) / 10, y: Math.round(y * 10) / 10 };
   }
 
@@ -99,7 +139,7 @@ export const Zoom = (Base) => class extends Base {
       e.preventDefault();
       const [a, b] = [...this._touches.values()];
       const scale = this._pinch.scale * Math.hypot(a[0] - b[0], a[1] - b[1]) / this._pinch.distance;
-      this.setZoom(this._zoomKeeping(this._pinch.point, [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], Math.min(ZOOM_MAX, Math.max(1, scale))), 'pinch');
+      this.setZoom(this._zoomKeeping(this._pinch.point, [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], Math.min(ZOOM_MAX, Math.max(this._zoomMin(), scale))), 'pinch');
       return true;
     }
     const pan = this._pan;
@@ -126,7 +166,7 @@ export const Zoom = (Base) => class extends Base {
     if (e.ctrlKey) {
       e.preventDefault();
       const zoom = this.zoom;
-      const scale = Math.min(ZOOM_MAX, Math.max(1, zoom.scale * Math.exp(-e.deltaY / 100)));
+      const scale = Math.min(ZOOM_MAX, Math.max(this._zoomMin(), zoom.scale * Math.exp(-e.deltaY / 100)));
       this.setZoom(this._zoomKeeping(this._designAt(e.clientX, e.clientY, zoom), [e.clientX, e.clientY], scale), 'wheel');
     } else if (this._zoom) {
       e.preventDefault();
@@ -148,7 +188,7 @@ export const Zoom = (Base) => class extends Base {
   flyZoom(zoom, reason = 'api', { announce = true } = {}) {
     this._stopZoomFlight();
     const design = { width: this.designWidth, height: this.designHeight };
-    const whole = { scale: 1, x: design.width / 2, y: design.height / 2 };
+    const whole = this._wholeZoom();
     const to = this._clampZoom(zoom);
     // Others get the view asked for and keep it on the slide themselves:
     // their screens may have another shape.

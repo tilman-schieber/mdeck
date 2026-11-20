@@ -139,3 +139,30 @@ test('flushPending writes only what waits: a deck that was only shown gets no dr
   file.flushPending()
   assert.equal(existsSync(inkFileFor(deck)), true, 'a stroke waiting for the debounce is written')
 })
+
+test('room or a blank page on a slide without an id gives it one, and both follow it', () => {
+  const { deck, file } = deckWith(SOURCE)
+  const { deckHash } = file.read()
+  const result = file.apply([
+    { type: 'page', slideId: 'slide-2', page: 'p1' },
+    { type: 'add', slideId: 'slide-2#p1', stroke: stroke('ipad:1') },
+    { type: 'room', slideId: 'slide-2', open: true },
+  ], deckHash)
+  assert.equal(result.status, 200)
+  assert.deepEqual(result.renamed, [{ from: 'slide-2', to: 'second' }])
+  file.flush()
+  const saved = JSON.parse(readFileSync(inkFileFor(deck), 'utf8'))
+  assert.deepEqual(saved.pages, { second: ['p1'] })
+  assert.deepEqual(saved.rooms, { second: { open: true } })
+  assert.deepEqual(Object.keys(saved.slides), ['second#p1'])
+  // The device still says slide-2: it reaches the page under the new id.
+  assert.equal(file.apply([{ type: 'add', slideId: 'slide-2#p1', stroke: stroke('ipad:2') }], deckHash).status, 200)
+  assert.equal(file.read().ink.slides['second#p1'].length, 2)
+  assert.equal(file.apply([{ type: 'page', slideId: 'second', page: 'x' }], result.deckHash).status, 400)
+  assert.equal(file.apply([{ type: 'room', slideId: 'second', open: 'yes' }], result.deckHash).status, 400)
+  assert.equal(file.apply([{ type: 'page', slideId: 'second', page: 'p1', remove: true }], result.deckHash).status, 200)
+  assert.deepEqual(file.read().ink.pages, {})
+  // Dropping a slide's drawings drops its room and the strokes of its pages too.
+  file.drop('second')
+  assert.deepEqual([file.read().ink.slides, file.read().ink.rooms], [{}, {}])
+})

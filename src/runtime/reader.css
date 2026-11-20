@@ -34,6 +34,7 @@ select.reader-language { appearance: auto; color-scheme: dark; padding: 6px 6px 
 .reader-read { flex: 1; overflow: auto; padding: 24px; display: flex; flex-direction: column; gap: 28px; align-items: center; }
 .reader-page { width: min(100%, 1400px); }
 .reader-page-frame { position: relative; width: 100%; overflow: hidden; box-shadow: 0 6px 30px rgba(0,0,0,0.5); border-radius: 4px; background: #000; }
+.reader-page-extra { margin-top: 16px; }
 .reader-page-scale { position: absolute; top: 0; left: 0; transform-origin: top left; }
 .reader-page-scale > section.slide { width: 100%; height: 100%; }
 .reader-read [data-step] { opacity: 1 !important; }

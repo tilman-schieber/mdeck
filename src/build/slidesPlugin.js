@@ -8,7 +8,7 @@ import { embedFonts } from './fonts.js'
 import { stripNotes as stripNotesFrom, shareSlides, emptyHiddenSlides } from '../core/editDeck.js'
 import { activitiesIn } from '../core/resultsReport.js'
 import { componentFolders, componentFiles } from './components.js'
-import { inkFileFor, normalizeInk, emptyInk } from '../core/ink.js'
+import { inkFileFor, normalizeInk, emptyInk, pickInk } from '../core/ink.js'
 import { resultsFileFor, normalizeResults } from '../core/results.js'
 import { isOwnWrite } from './ownWrites.js'
 import { fileURLToPath } from 'node:url'
@@ -515,14 +515,14 @@ export function slidesPlugin(slidesPath, { languages = false, inlineImages = fal
         // Drawings on hidden slides stay on this computer, as the slides do.
         if (stripHidden) {
           const gone = new Set(emptyHiddenSlides(readDeck()).ids)
-          if (gone.size) data = { ...data, slides: Object.fromEntries(Object.entries(data.slides).filter(([id]) => !gone.has(id))) }
+          if (gone.size) data = pickInk(data, id => !gone.has(id))
         }
         // Without the activity slides or those not chosen, drawings follow their slides to their new ids.
         if (stripActivities || slides) {
           try {
             const { ids, removed } = shareSlides(withoutHidden(readDeck()), { activities: stripActivities, slides })
             const gone = new Set(removed)
-            data = { ...data, slides: Object.fromEntries(Object.entries(data.slides).filter(([id]) => !gone.has(id)).map(([id, strokes]) => [ids[id] ?? id, strokes])) }
+            data = pickInk(data, id => !gone.has(id), id => ids[id] ?? id)
           } catch {}
         }
         return `export default ${JSON.stringify(data)}\nexport const inkFileName = ${JSON.stringify(basename(inkPath))}`

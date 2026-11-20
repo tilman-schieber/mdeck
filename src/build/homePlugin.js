@@ -20,6 +20,7 @@ import { resultsReport, reportAnswersCsv, reportSummaryCsv, reportJson } from '.
 import { expandedSource } from './include.js'
 import { reactionsOf } from '../core/reactions.js'
 import { slideTitle } from '../core/outline.js'
+import { baseSlideId } from '../core/ink.js'
 import { languageOfFile } from '../core/languages.js'
 import { deckLanguages } from './slidesPlugin.js'
 import { createResultsFile } from './resultsPlugin.js'
@@ -183,14 +184,19 @@ export function homeMiddleware(slidesPath, { urls = () => ({ local: [], network:
   // The slides drawn on (<deck>.drawings.json), in the deck's order, then
   // drawings of slides the deck no longer has; null while there are none.
   function drawings() {
-    let slides
-    try { slides = ink().read().ink.slides } catch { return null }
-    if (!Object.keys(slides).length) return null
+    let kept
+    try { kept = ink().read().ink } catch { return null }
+    // A slide's blank pages (intro#p4k2) count as its drawings.
+    const counts = new Map()
+    for (const [id, strokes] of Object.entries(kept.slides)) counts.set(baseSlideId(id), (counts.get(baseSlideId(id)) ?? 0) + strokes.length)
+    for (const id of Object.keys(kept.pages ?? {})) if (!counts.has(id)) counts.set(id, 0)
+    if (!counts.size) return null
     let deck
     try { deck = parseSlides(expandedSource(abs)) } catch { deck = parseSlides(readFileSync(abs, 'utf8')) }
-    const shown = deck.slides.flatMap((slide, index) => slides[slide.id] ? [{ id: slide.id, slide: index + 1, title: slideTitle(slide, index, null), strokes: slides[slide.id].length }] : [])
-    const known = new Set(shown.map(entry => entry.id))
-    const gone = Object.entries(slides).filter(([id]) => !known.has(id)).map(([id, strokes]) => ({ id, slide: null, title: null, strokes: strokes.length }))
+    const entry = (id, slide, title) => ({ id, slide, title, strokes: counts.get(id), pages: kept.pages?.[id]?.length ?? 0 })
+    const shown = deck.slides.flatMap((slide, index) => counts.has(slide.id) ? [entry(slide.id, index + 1, slideTitle(slide, index, null))] : [])
+    const known = new Set(shown.map(item => item.id))
+    const gone = [...counts.keys()].filter(id => !known.has(id)).map(id => entry(id, null, null))
     return [...shown, ...gone]
   }
 
